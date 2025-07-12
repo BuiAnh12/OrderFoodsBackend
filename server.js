@@ -22,6 +22,7 @@ const orderRoute = require("./routes/order.routes");
 const favoriteRoute = require("./routes/favorite.routes");
 const locationRoute = require("./routes/location.routes");
 const notificationRoute = require("./routes/notification.routes");
+const userRoute = require("./routes/user.routes");
 
 const app = express();
 connectDB();
@@ -75,6 +76,7 @@ app.use("/api/v1/order", orderRoute);
 app.use("/api/v1/favorite", favoriteRoute);
 app.use("/api/v1/location", locationRoute);
 app.use("/api/v1/notification", notificationRoute);
+app.use("/api/v1/user", userRoute);
 
 app.use(errorHandler);
 
