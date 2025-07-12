@@ -1,22 +1,13 @@
 const mongoose = require("mongoose");
 
-const locationSchema = new mongoose.Schema(
+var orderShipInfoSchema = new mongoose.Schema(
   {
-    userId: {
+    orderId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-    },
-    name: {
-      type: String,
+      ref: "Order",
       required: true,
-      trim: true,
     },
-    address: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    location: {
+    shipLocation: {
       type: {
         type: String,
         enum: ["Point"],
@@ -28,6 +19,10 @@ const locationSchema = new mongoose.Schema(
         required: true,
       },
     },
+    address: {
+      type: String,
+      trim: true,
+    },
     detailAddress: {
       type: String,
       trim: true,
@@ -36,25 +31,19 @@ const locationSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
-    note: {
-      type: String,
-      trim: true,
-    },
     contactPhonenumber: {
       type: String,
       trim: true,
     },
-    type: {
+    note: {
       type: String,
-      enum: ["home", "company", "familiar"],
-      default: "familiar",
+      trim: true,
     },
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
-locationSchema.index({ location: "2dsphere" });
+// Create a 2dsphere index to support geospatial queries
+orderShipInfoSchema.index({ shipLocation: "2dsphere" });
 
-module.exports = mongoose.model("Location", locationSchema);
+module.exports = mongoose.model("OrderShipInfo", orderShipInfoSchema);

@@ -15,12 +15,6 @@ const toppingGroupSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
-    toppings: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Topping",
-      },
-    ],
   },
   { timestamps: true }
 );

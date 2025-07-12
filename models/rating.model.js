@@ -2,22 +2,21 @@ const mongoose = require("mongoose");
 
 const ratingSchema = new mongoose.Schema(
   {
-    user: {
+    userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
-    store: {
+    storeId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Store",
       required: true,
     },
-    dishes: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Dish",
-      },
-    ],
+    orderId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Order",
+      required: true,
+    },
     ratingValue: {
       type: Number,
       required: true,
@@ -37,32 +36,5 @@ const ratingSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
-
-ratingSchema.statics.getAverageRating = async function (dishId) {
-  const result = await this.aggregate([
-    { $match: { dish: dishId } },
-    {
-      $group: {
-        _id: "$dish",
-        avgRating: { $avg: "$ratingValue" },
-        count: { $sum: 1 },
-      },
-    },
-  ]);
-  return result.length > 0 ? result[0] : { avgRating: 0, count: 0 };
-};
-ratingSchema.statics.getStoreRatingSummary = async function (storeId) {
-  const result = await this.aggregate([
-    { $match: { store: storeId } },
-    {
-      $group: {
-        _id: "$store",
-        avgRating: { $avg: "$ratingValue" },
-        count: { $sum: 1 },
-      },
-    },
-  ]);
-  return result.length > 0 ? result[0] : { avgRating: 0, count: 0 };
-};
 
 module.exports = mongoose.model("Rating", ratingSchema);

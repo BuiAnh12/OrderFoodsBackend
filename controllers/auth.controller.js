@@ -1,6 +1,5 @@
 const User = require("../models/user.model");
-const Store  = require("../models/store.model");
-const Employee = require("../models/employee.model");
+const Store = require("../models/store.model");
 const jwt = require("jsonwebtoken");
 const createError = require("../utils/createError");
 const crypto = require("crypto");
@@ -27,10 +26,7 @@ const generateRefreshToken = (id) => {
 const storeOwnByUser = asyncHandler(async (req, res, next) => {
   const { _id } = req.user;
   const findStore = await Store.findOne({
-    $or: [
-      { owner: _id },
-      { staff: _id },
-    ],
+    $or: [{ owner: _id }, { staff: _id }],
   });
 
   if (!findStore) {
@@ -38,7 +34,7 @@ const storeOwnByUser = asyncHandler(async (req, res, next) => {
   }
 
   res.status(200).json({ data: findStore });
-})
+});
 
 const register = asyncHandler(async (req, res, next) => {
   const { name, email, phonenumber, gender, password } = req.body;
@@ -159,69 +155,6 @@ const login = asyncHandler(async (req, res, next) => {
   }
 });
 
-const loginAdmin = asyncHandler(async (req, res, next) => {
-  const { email, password } = req.body;
-
-  if (!email || !password) {
-    next(createError(400, "Vui lòng điền đầy đủ thông tin"));
-  }
-
-  const findEmployee = await Employee.findOne({ email: email });
-  if (findEmployee && (await findEmployee.isPasswordMatched(password))) {
-    const refreshToken = generateRefreshToken(findEmployee._id);
-    await Employee.findByIdAndUpdate(
-      findEmployee._id,
-      {
-        refreshToken: refreshToken,
-      },
-      { new: true }
-    );
-    res.cookie("refreshToken", refreshToken, {
-      maxAge: 30 * 24 * 60 * 60 * 1000,
-    });
-    res.status(200).json({
-      _id: findEmployee?._id,
-      token: generateAccessAdminToken(findEmployee?._id, findEmployee.role),
-    });
-  } else {
-    return next(createError(401, "Email hoặc mật khẩu không hợp lệ!"));
-  }
-});
-
-const loginShipper = asyncHandler(async (req, res, next) => {
-  const { email, password } = req.body;
-
-  if (!email || !password) {
-    next(createError(400, "Vui lòng điền đầy đủ thông tin"));
-  }
-
-  const findShipper = await Shipper.findOne({ email: email });
-
-  if (findShipper.status !== "APPROVED") {
-    return next(createError(403, "Tài khoản chưa được phê duyệt!"));
-  }
-  if (findShipper && (await findShipper.isPasswordMatched(password))) {
-    const refreshToken = generateRefreshToken(findShipper._id);
-    await Shipper.findByIdAndUpdate(
-      findShipper._id,
-      {
-        refreshToken: refreshToken,
-      },
-      { new: true }
-    );
-    res.cookie("refreshToken", refreshToken, {
-      maxAge: 30 * 24 * 60 * 60 * 1000,
-    });
-    res.status(200).json({
-      _id: findShipper?._id,
-      email: findShipper.email,
-      token: generateAccessToken(findShipper?._id),
-    });
-  } else {
-    return next(createError(401, "Email hoặc mật khẩu không hợp lệ!"));
-  }
-});
-
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 const googleLoginWithToken = asyncHandler(async (req, res, next) => {
@@ -286,87 +219,6 @@ const googleLoginWithToken = asyncHandler(async (req, res, next) => {
         res.status(200).json({
           _id: user?._id,
           token: generateAccessToken(user?._id),
-        });
-      } else {
-        next(createError(409, "Tài khoản đã tồn tại"));
-      }
-    }
-  } catch (error) {
-    console.log(error);
-    return next(createError(500, "Google authentication failed!"));
-  }
-});
-
-const loginMobile = asyncHandler(async (req, res, next) => {
-  const { email, password } = req.body;
-
-  if (!email || !password) {
-    next(createError(400, "Vui lòng điền đầy đủ thông tin"));
-  }
-
-  const findUser = await User.findOne({ email: email });
-  if (findUser && (await findUser.isPasswordMatched(password))) {
-    const refreshToken = generateRefreshToken(findUser._id);
-    await User.findByIdAndUpdate(
-      findUser._id,
-      {
-        refreshToken: refreshToken,
-      },
-      { new: true }
-    );
-    res.status(200).json({
-      _id: findUser?._id,
-      token: generateAccessToken(findUser?._id),
-      refreshToken,
-    });
-  } else {
-    return next(createError(401, "Email hoặc mật khẩu không hợp lệ!"));
-  }
-});
-
-const loginWithGoogleMobile = asyncHandler(async (req, res, next) => {
-  try {
-    const { name, email } = req.body;
-
-    // Kiểm tra xem user đã tồn tại chưa
-    let user = await User.findOne({ email });
-    if (!user) {
-      newUser = new User({
-        name: name,
-        email: email,
-        password: "123456789",
-        isGoogleLogin: true,
-      });
-      await newUser.save();
-
-      const refreshToken = generateRefreshToken(newUser._id);
-      await User.findByIdAndUpdate(
-        newUser._id,
-        {
-          refreshToken: refreshToken,
-        },
-        { new: true }
-      );
-
-      res.status(200).json({
-        _id: newUser?._id,
-        token: generateAccessToken(newUser?._id),
-        refreshToken,
-      });
-    } else {
-      if (user.isGoogleLogin) {
-        const refreshToken = generateRefreshToken(user._id);
-        await User.findByIdAndUpdate(
-          user._id,
-          {
-            refreshToken: refreshToken,
-          },
-          { new: true }
-        );
-        res.status(200).json({
-          _id: user?._id,
-          token: generateAccessToken(user?._id),
-          refreshToken,
         });
       } else {
         next(createError(409, "Tài khoản đã tồn tại"));
@@ -517,9 +369,7 @@ const forgotPasswordShipper = asyncHandler(async (req, res, next) => {
 
   const shipper = await Shipper.findOne({ email, isGoogleLogin: false });
   if (!shipper) {
-    return next(
-      createError(404, "Tài khoản không tồn tại hoặc tài khoản được đăng nhập bằng phương thức khác")
-    );
+    return next(createError(404, "Tài khoản không tồn tại hoặc tài khoản được đăng nhập bằng phương thức khác"));
   }
 
   const otp = await shipper.createOtp();
@@ -596,64 +446,9 @@ const resetPasswordShipper = asyncHandler(async (req, res, next) => {
   });
 });
 
-
-const forgotPasswordEmployee = asyncHandler(async (req, res, next) => {
-  const { email } = req.body;
-  const employee = await Employee.findOne({ email });
-  if (!employee) return next(createError("404", "Account not existed!"));
-
-  const otp = await employee.createOtp();
-  await employee.save();
-
-  const resetURL = `
-      <p>Your otp is: ${otp}</p>
-      <p>Please you this to reset your password. It will be expired in 2 minutes</p>
-    `;
-  const data = {
-    to: email,
-    text: "",
-    subject: "Forgot Password OTP",
-    html: resetURL,
-  };
-  await sendEmail(data);
-  res.status(200).json("Send email successfully");
-});
-
-const checkOTPForEmployee = asyncHandler(async (req, res, next) => {
-  const { email, otp } = req.body;
-  const hashedOTP = crypto.createHash("sha256").update(otp).digest("hex");
-
-  const employee = await Employee.findOne({
-    email,
-    otp: hashedOTP,
-    otpExpires: { $gt: Date.now() },
-  });
-
-  if (!employee) return next(createError("400", "Your otp is not correct or expired!"));
-
-  employee.otp = undefined;
-  employee.otpExpires = undefined;
-  await employee.save();
-
-  res.status(200).json("OTP valid");
-});
-
-const resetPasswordEmployee = asyncHandler(async (req, res, next) => {
-  const { email, password } = req.body;
-
-  const employee = await Employee.findOne({ email });
-  if (!employee) return next(createError(404, "Employee not found"));
-
-  employee.password = password;
-  await employee.save();
-
-  res.status(200).json("Reset password successfully!");
-});
-
 module.exports = {
   register,
   login,
-  loginAdmin,
   googleLoginWithToken,
   getRefreshToken,
   logout,
@@ -664,7 +459,4 @@ module.exports = {
   registerStoreOwner,
   checkRegisterStoreOwner,
   storeOwnByUser,
-  forgotPasswordEmployee,
-  checkOTPForEmployee,
-  resetPasswordEmployee,
 };

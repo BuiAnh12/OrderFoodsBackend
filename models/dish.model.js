@@ -12,11 +12,11 @@ const dishSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
-    category: {
+    categoryId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Category",
     },
-    store: {
+    storeId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Store",
       required: true,
