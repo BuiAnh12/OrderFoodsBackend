@@ -20,6 +20,7 @@ const customerStoreRoute = require("./routes/customerStore.routes");
 const cartRoute = require("./routes/cart.routes");
 const orderRoute = require("./routes/order.routes");
 const favoriteRoute = require("./routes/favorite.routes");
+const locationRoute = require("./routes/location.routes");
 
 const app = express();
 connectDB();
@@ -71,6 +72,7 @@ app.use("/api/v1/customer-store", customerStoreRoute);
 app.use("/api/v1/cart", cartRoute);
 app.use("/api/v1/order", orderRoute);
 app.use("/api/v1/favorite", favoriteRoute);
+app.use("/api/v1/location", locationRoute);
 
 app.use(errorHandler);
 

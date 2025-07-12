@@ -1,0 +1,104 @@
+const Location = require("../models/location.model");
+const createError = require("../utils/createError");
+const asyncHandler = require("express-async-handler");
+
+const addLocation = asyncHandler(async (req, res, next) => {
+  const userId = req?.user?._id;
+  const { type } = req.body;
+
+  try {
+    if (!userId) {
+      next(createError(400, "User ID is required"));
+    }
+
+    if (["home", "company"].includes(type)) {
+      const existingLocation = await Location.findOne({ userId, type });
+      if (existingLocation) {
+        return next(createError(400, `You can only have one ${type} location.`));
+      }
+    }
+
+    const location = await Location.create({
+      ...req.body,
+      userId,
+    });
+
+    res.status(201).json(location);
+  } catch (error) {
+    next(createError(500, error.message));
+  }
+});
+
+const getLocation = asyncHandler(async (req, res, next) => {
+  const { id } = req.params;
+
+  try {
+    const location = await Location.findById(id);
+
+    if (!location) {
+      next(createError(404, "Location not found"));
+    }
+
+    res.status(200).json(location);
+  } catch (error) {
+    next(error);
+  }
+});
+
+const getUserLocations = asyncHandler(async (req, res, next) => {
+  const userId = req?.user?._id;
+
+  try {
+    if (!userId) {
+      next(createError(400, "User ID is required"));
+    }
+
+    const locations = await Location.find({ userId });
+
+    res.status(200).json(locations);
+  } catch (error) {
+    next(error);
+  }
+});
+
+const updateLocation = asyncHandler(async (req, res, next) => {
+  const { id } = req.params;
+
+  try {
+    const existingLocation = await Location.findById(id);
+    if (!existingLocation) {
+      next(createError(404, "Location not found"));
+    }
+
+    const location = await Location.findByIdAndUpdate(id, { $set: req.body }, { new: true, runValidators: true });
+
+    res.status(200).json(location);
+  } catch (error) {
+    next(error);
+  }
+});
+
+const deleteLocation = asyncHandler(async (req, res, next) => {
+  const { id } = req.params;
+
+  try {
+    const existingLocation = await Location.findById(id);
+    if (!existingLocation) {
+      next(createError(404, "Location not found"));
+    }
+
+    const location = await Location.findByIdAndDelete(id);
+
+    res.status(200).json(location);
+  } catch (error) {
+    next(error);
+  }
+});
+
+module.exports = {
+  addLocation,
+  getLocation,
+  updateLocation,
+  deleteLocation,
+  getUserLocations,
+};
