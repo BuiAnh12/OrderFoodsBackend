@@ -9,6 +9,9 @@ const Topping = require("../models/topping.model");
 const Rating = require("../models/rating.model");
 const Notification = require("../models/notification.model");
 const Order = require("../models/order.model");
+const OrderItem = require("../models/orderItem.model");
+const OrderItemTopping = require("../models/orderItemTopping.model");
+const OrderShipInfo = require("../models/orderShipInfo.model");
 
 const getUserCart = async (req, res) => {
   try {
@@ -109,7 +112,7 @@ const getDetailCart = async (req, res) => {
         dishId: item.dishId._id,
         dishName: item.dishName,
         quantity: item.quantity,
-        unitPrice: item.unitPrice,
+        price: item.price,
         toppings,
       };
     });
@@ -210,7 +213,7 @@ const updateCart = async (req, res) => {
           dishId: dish._id,
           dishName: dish.name,
           quantity,
-          unitPrice: dish.price,
+          price: dish.price,
         });
 
         for (const toppingId of toppings) {
@@ -312,149 +315,109 @@ const completeCart = async (req, res) => {
       detailAddress,
       note,
       location = [],
+      shippingFee = 0,
+      totalDiscount = 0,
     } = req.body;
 
     if (!userId) {
       return res.status(401).json({ success: false, message: "User not found" });
     }
 
-    if (!storeId || !paymentMethod || !deliveryAddress || !location) {
+    if (!storeId || !paymentMethod || !deliveryAddress || !Array.isArray(location) || location.length !== 2) {
       return res.status(400).json({ success: false, message: "Invalid request body" });
     }
 
     const cart = await Cart.findOne({ user: userId, store: storeId });
-    if (!cart || !cart.items.length) {
+    if (!cart) {
+      return res.status(400).json({ success: false, message: "Cart not found" });
+    }
+
+    const cartItems = await CartItem.find({ cartId: cart._id });
+    if (!cartItems.length) {
       return res.status(400).json({ success: false, message: "Cart is empty" });
     }
 
-    const newOrder = new Order({
+    let subtotal = 0;
+
+    const newOrder = await Order.create({
       user: userId,
-      customerName,
-      customerPhonenumber,
-      note,
       store: storeId,
-      items: cart.items,
-      totalPrice: cart.totalPrice,
+      paymentMethod,
+      status: "pending",
+      subtotalPrice: 0, // Tạm thời 0, lát cập nhật lại
+      totalDiscount: 0,
+      shippingFee: 0,
+      finalTotal: 0,
+    });
+
+    for (const item of cartItems) {
+      const orderItem = await OrderItem.create({
+        orderId: newOrder._id,
+        dishId: item.dishId,
+        dishName: item.dishName,
+        quantity: item.quantity,
+        price: item.price,
+        note: item.note,
+      });
+
+      const toppings = await CartItemTopping.find({ cartItemId: item._id });
+
+      let toppingTotal = 0;
+      for (const topping of toppings) {
+        toppingTotal += topping.price;
+        await OrderItemTopping.create({
+          orderItemId: orderItem._id,
+          toppingId: topping.toppingId,
+          toppingName: topping.toppingName,
+          price: topping.price,
+        });
+      }
+
+      // Tính tổng cho từng món (cả topping)
+      subtotal += (item.price + toppingTotal) * item.quantity;
+    }
+
+    // Cập nhật lại order với tổng tiền
+    const finalTotal = subtotal - totalDiscount + shippingFee;
+
+    newOrder.subtotalPrice = subtotal;
+    newOrder.totalDiscount = totalDiscount;
+    newOrder.shippingFee = shippingFee;
+    newOrder.finalTotal = finalTotal;
+    await newOrder.save();
+
+    await OrderShipInfo.create({
+      orderId: newOrder._id,
       shipLocation: {
         type: "Point",
         coordinates: location,
-        address: deliveryAddress,
-        detailAddress,
       },
-      status: "pending",
-      paymentMethod: paymentMethod,
-      createdAt: new Date(),
+      address: deliveryAddress,
+      detailAddress,
+      contactName: customerName,
+      contactPhonenumber: customerPhonenumber,
+      note,
     });
 
-    await newOrder.save();
-    await Cart.findOneAndDelete({ user: userId });
+    await CartItemTopping.deleteMany({ cartItemId: { $in: cartItems.map((i) => i._id) } });
+    await CartItem.deleteMany({ cartId: cart._id });
+    await Cart.findByIdAndDelete(cart._id);
 
     const store = await Store.findById(storeId);
-    const userIds = [store.owner.toString(), ...(store.staff || []).map((s) => s.toString())];
-
-    // Create and save the notification
-    const newNotification = new Notification({
+    await Notification.create({
       userId: store.owner,
+      orderId: newOrder._id,
       title: "New Order has been placed",
       message: "You have a new order!",
       type: "order",
       status: "unread",
-      createdAt: new Date(),
     });
-
-    await newNotification.save();
-
-    // socket.emit("orderPlaced", {
-    //   userIds,
-    //   notification: {
-    //     id: newNotification._id,
-    //     title: newNotification.title,
-    //     message: newNotification.message,
-    //     type: newNotification.type,
-    //     status: newNotification.status,
-    //     createdAt: newNotification.createdAt,
-    //     updatedAt: newNotification.updatedAt,
-    //   },
-    //   order: {
-    //     id: newOrder.id,
-    //     customerName: newOrder.customerName,
-    //     totalPrice: newOrder.totalPrice,
-    //     status: newOrder.status,
-    //     createdAt: newOrder.createdAt,
-    //   },
-    //   userId: userId,
-    // });
 
     return res.status(201).json({
       success: true,
       message: "Order placed successfully",
       order: newOrder,
     });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-const reOrder = async (req, res) => {
-  try {
-    const userId = req?.user?._id;
-    const { storeId, items } = req.body;
-
-    if (!userId) {
-      return res.status(401).json({ success: false, message: "User not found" });
-    }
-    if (!storeId) {
-      return res.status(400).json({ success: false, message: "Invalid request body" });
-    }
-    if (!Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ success: false, message: "Items cannot be empty" });
-    }
-
-    const store = await Store.findById(storeId);
-    if (!store) {
-      return res.status(404).json({ success: false, message: "Store not found" });
-    }
-
-    if (store.status === "BLOCKED") {
-      return res.status(403).json({ success: false, message: "Cannot reorder from a blocked store" });
-    }
-
-    isHasOutOfStockDish = false;
-    items.map((item) => {
-      if (item.dish.stockStatus === "OUT_OF_STOCK") {
-        isHasOutOfStockDish = true;
-      }
-    });
-
-    if (isHasOutOfStockDish) {
-      return res.status(403).json({ success: false, message: "Order has out of stock dish" });
-    }
-
-    let cart = await Cart.findOne({ user: userId, store: storeId });
-
-    if (cart) {
-      cart.items = items;
-      await cart.save();
-
-      return res.status(200).json({
-        success: true,
-        message: "ReOrder updated successfully",
-        cart,
-      });
-    } else {
-      const newCart = await Cart.create({
-        user: userId,
-        store: storeId,
-        items,
-      });
-
-      return res.status(201).json({
-        success: true,
-        message: "ReOrder successfully",
-        cart: newCart,
-      });
-    }
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, message: error.message });
@@ -468,5 +431,4 @@ module.exports = {
   clearCart,
   completeCart,
   updateCart,
-  reOrder,
 };

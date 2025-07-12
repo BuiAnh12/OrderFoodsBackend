@@ -18,6 +18,7 @@ const swaggerJsdoc = require("swagger-jsdoc");
 const authRoute = require("./routes/auth.routes");
 const customerStoreRoute = require("./routes/customerStore.routes");
 const cartRoute = require("./routes/cart.routes");
+const orderRoute = require("./routes/order.routes");
 
 const app = express();
 connectDB();
@@ -67,6 +68,7 @@ app.get("/health", (req, res) => {
 app.use("/api/v1/auth", authRoute);
 app.use("/api/v1/customer-store", customerStoreRoute);
 app.use("/api/v1/cart", cartRoute);
+app.use("/api/v1/order", orderRoute);
 
 app.use(errorHandler);
 
