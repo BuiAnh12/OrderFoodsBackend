@@ -20,7 +20,7 @@ var orderItemSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
-    unitPrice: {
+    price: {
       type: Number,
       required: true,
     },
