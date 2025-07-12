@@ -25,8 +25,10 @@ router.post("/store", authMiddleware, storeOwnByUser);
 router.post("/login/google", googleLoginWithToken);
 router.post("/forgot-password", forgotPassword);
 router.post("/check-otp", checkOTP);
+
 router.get("/logout", logout);
 router.get("/refresh", getRefreshToken);
+
 router.put("/change-password", authMiddleware, changePassword);
 router.put("/reset-password", resetPassword);
 
