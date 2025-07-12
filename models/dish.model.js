@@ -12,7 +12,7 @@ const dishSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
-    categoryId: {
+    category: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Category",
     },
@@ -28,7 +28,7 @@ const dishSchema = new mongoose.Schema(
     toppingGroups: [
       {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "ToppingGroup", // Reference the ToppingGroup model
+        ref: "ToppingGroup",
       },
     ],
     description: {

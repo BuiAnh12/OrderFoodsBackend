@@ -16,6 +16,7 @@ const swaggerJsdoc = require("swagger-jsdoc");
 
 // Routes
 const authRoute = require("./routes/auth.routes");
+const customerStoreRoute = require("./routes/customerStore.routes");
 
 const app = express();
 connectDB();
@@ -23,10 +24,7 @@ connectDB();
 app.use(morgan("dev"));
 app.use(
   cors({
-    origin: [
-      "http://localhost:3000",
-      "http://localhost:3001",
-    ],
+    origin: ["http://localhost:3000", "http://localhost:3001"],
     credentials: true,
   })
 );
@@ -64,11 +62,9 @@ app.get("/health", (req, res) => {
   res.status(200).json({ status: "OK" });
 });
 
-
 // Routes
 app.use("/api/v1/auth", authRoute);
-
-
+app.use("/api/v1/customer-store", customerStoreRoute);
 
 app.use(errorHandler);
 
@@ -76,5 +72,5 @@ const server = http.createServer(app);
 const io = socketIo(server, { cors: { origin: "*" } });
 
 server.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+  console.log(`Server running on http://localhost:${PORT}`);
+});
