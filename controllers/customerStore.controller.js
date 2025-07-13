@@ -39,7 +39,7 @@ const getAllStore = async (req, res) => {
     const storeRatings = await Rating.aggregate([
       {
         $group: {
-          _id: "$store",
+          _id: "$storeId",
           avgRating: { $avg: "$ratingValue" },
           amountRating: { $sum: 1 },
         },
@@ -90,7 +90,7 @@ const getAllStore = async (req, res) => {
       stores = stores.sort((a, b) => b.avgRating - a.avgRating);
     } else if (sort === "standout") {
       // Sắp xếp theo số lượng đơn hàng
-      const storeOrders = await Order.aggregate([{ $group: { _id: "$store", orderCount: { $sum: 1 } } }]);
+      const storeOrders = await Order.aggregate([{ $group: { _id: "$storeId", orderCount: { $sum: 1 } } }]);
 
       stores = stores
         .map((store) => {
@@ -140,10 +140,10 @@ const getAllStore = async (req, res) => {
 
 const getStoreInformation = async (req, res) => {
   try {
-    const { store_id } = req.params; // Extract store_id correctly
+    const { storeId } = req.params; // Extract storeId correctly
 
     // Find store by ID
-    const store = await Store.findById(store_id).populate("storeCategory");
+    const store = await Store.findById(storeId).populate("storeCategory");
 
     if (!store) {
       return res.status(404).json({
@@ -157,7 +157,7 @@ const getStoreInformation = async (req, res) => {
       { $match: { store: store._id } }, // Only consider ratings for this store
       {
         $group: {
-          _id: "$store",
+          _id: "$storeId",
           avgRating: { $avg: "$ratingValue" },
           amountRating: { $sum: 1 },
         },
@@ -195,12 +195,8 @@ const getStoreInformation = async (req, res) => {
 const getAllDishInStore = async (req, res) => {
   try {
     const { storeId } = req.params;
-    const { name, limit, page } = req.query;
 
-    let filterOptions = { storeId: storeId };
-    if (name) filterOptions.name = { $regex: name, $options: "i" };
-
-    const response = await getPaginatedData(Dish, filterOptions, [{ path: "category", select: "name" }], limit, page);
+    const response = await Dish.find({ storeId });
 
     res.status(200).json({
       success: true,
@@ -213,9 +209,9 @@ const getAllDishInStore = async (req, res) => {
 
 const getDetailDish = async (req, res) => {
   try {
-    const { dish_id } = req.params;
+    const { dishId } = req.params;
 
-    const dish = await Dish.findById(dish_id).populate([
+    const dish = await Dish.findById(dishId).populate([
       { path: "category", select: "name" },
       {
         path: "toppingGroups",

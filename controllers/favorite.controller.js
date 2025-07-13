@@ -13,7 +13,6 @@ const getUserFavorite = async (req, res) => {
         select: "name avatar status",
       })
       .lean();
-    console.log(favorite);
 
     if (!favorite || favorite.length === 0) {
       return res.status(404).json({
@@ -25,7 +24,7 @@ const getUserFavorite = async (req, res) => {
     favorite.store = favorite.store.filter((store) => store.status === "APPROVED");
 
     const storeRatings = await Rating.aggregate([
-      { $group: { _id: "$store", avgRating: { $avg: "$ratingValue" }, amountRating: { $sum: 1 } } },
+      { $group: { _id: "$storeId", avgRating: { $avg: "$ratingValue" }, amountRating: { $sum: 1 } } },
     ]);
     favorite.store = favorite.store.map((store) => {
       const rating = storeRatings.find((r) => r._id.toString() == store._id.toString());
