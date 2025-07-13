@@ -20,90 +20,52 @@ const mongoose = require("mongoose");
 const getUserOrder = asyncHandler(async (req, res, next) => {
   const userId = req?.user?._id;
   if (!userId) {
-    const error = new Error("User not found");
-    error.status = 400;
-    return next(error);
+    return next(createError(400, "User not found"));
   }
 
-  // Lấy danh sách đơn hàng
-  let orders = await Order.find({ user: userId })
+  const orders = await Order.find({ userId })
     .populate({
       path: "store",
+      select: "name avatar status",
+    })
+    .populate({
+      path: "items",
+      populate: [
+        {
+          path: "dish",
+          select: "name price image",
+        },
+        {
+          path: "toppings",
+        },
+      ],
+    })
+    .populate({
+      path: "user",
       select: "name avatar",
     })
-    .sort({ updatedAt: -1 });
+    .sort({ updatedAt: -1 })
+    .lean();
 
   // Lọc các đơn có store hợp lệ
-  orders = orders.filter((order) => order.store?.status === "APPROVED");
-  if (!orders.length) {
-    const error = new Error("Order not found");
-    error.status = 404;
-    return next(error);
+  const filteredOrders = orders.filter((order) => order.store?.status === "APPROVED");
+
+  if (!filteredOrders.length) {
+    return next(createError(404, "No orders found"));
   }
 
-  const orderIds = orders.map((o) => o._id);
+  // Lấy thông tin giao hàng
+  const orderIds = filteredOrders.map((order) => order._id);
+  const shipInfos = await OrderShipInfo.find({ orderId: { $in: orderIds } }).lean();
+  const shipMap = Object.fromEntries(shipInfos.map((info) => [info.orderId.toString(), info]));
 
-  // Lấy item & topping
-  const orderItems = await OrderItem.find({ orderId: { $in: orderIds } });
-  const orderItemIds = orderItems.map((item) => item._id);
-  const orderToppings = await OrderItemTopping.find({ orderItemId: { $in: orderItemIds } });
-
-  // Lấy ship info
-  const shipInfos = await OrderShipInfo.find({ orderId: { $in: orderIds } });
-  const orderIdToShip = {};
-  shipInfos.forEach((info) => {
-    orderIdToShip[info.orderId.toString()] = {
-      address: info.address,
-      detailAddress: info.detailAddress,
-      contactName: info.contactName,
-      contactPhonenumber: info.contactPhonenumber,
-      note: info.note,
-      shipLocation: info.shipLocation,
-    };
-  });
-
-  // Gộp topping vào item
-  const itemIdToToppings = {};
-  orderToppings.forEach((t) => {
-    const key = t.orderItemId.toString();
-    if (!itemIdToToppings[key]) itemIdToToppings[key] = [];
-    itemIdToToppings[key].push({
-      toppingName: t.toppingName,
-      price: t.price,
-    });
-  });
-
-  // Gộp item vào order
-  const orderIdToItems = {};
-  orderItems.forEach((item) => {
-    const key = item.orderId.toString();
-    if (!orderIdToItems[key]) orderIdToItems[key] = [];
-    orderIdToItems[key].push({
-      dishName: item.dishName,
-      quantity: item.quantity,
-      price: item.price,
-      note: item.note,
-      toppings: itemIdToToppings[item._id.toString()] || [],
-    });
-  });
-
-  // Trả về kết quả đầy đủ
-  const result = orders.map((order) => ({
-    _id: order._id,
-    store: order.store,
-    status: order.status,
-    paymentMethod: order.paymentMethod,
-    subtotalPrice: order.subtotalPrice,
-    totalDiscount: order.totalDiscount,
-    shippingFee: order.shippingFee,
-    finalTotal: order.finalTotal,
-    createdAt: order.createdAt,
-    updatedAt: order.updatedAt,
-    shipInfo: orderIdToShip[order._id.toString()] || null,
-    items: orderIdToItems[order._id.toString()] || [],
+  // Trả về kết quả
+  const result = filteredOrders.map((order) => ({
+    ...order,
+    shipInfo: shipMap[order._id.toString()] || null,
   }));
 
-  return res.status(200).json({
+  res.status(200).json({
     success: true,
     data: result,
   });
@@ -116,40 +78,37 @@ const getOrderDetail = asyncHandler(async (req, res, next) => {
     return next(createError(400, "orderId not found"));
   }
 
-  const order = await Order.findById(orderId).populate({
-    path: "store",
-    select: "name avatar",
-  });
+  const order = await Order.findById(orderId)
+    .populate({
+      path: "store",
+      select: "name avatar",
+    })
+    .populate({
+      path: "items",
+      populate: [
+        {
+          path: "dish",
+          select: "name price image description",
+        },
+        {
+          path: "toppings",
+        },
+      ],
+    })
+    .lean(); // optional: convert to plain object
+
   if (!order) {
     return next(createError(404, "Order not found"));
   }
 
-  const items = await OrderItem.find({ orderId: order._id });
-  const itemIds = items.map((i) => i._id);
-  const toppings = await OrderItemTopping.find({ orderItemId: { $in: itemIds } });
-  const shipInfo = await OrderShipInfo.findOne({ orderId: order._id });
-
-  const toppingMap = {};
-  toppings.forEach((t) => {
-    const key = t.orderItemId.toString();
-    if (!toppingMap[key]) toppingMap[key] = [];
-    toppingMap[key].push({ toppingName: t.toppingName, price: t.price });
-  });
-
-  const itemsWithToppings = items.map((item) => ({
-    dishName: item.dishName,
-    quantity: item.quantity,
-    price: item.price,
-    note: item.note,
-    toppings: toppingMap[item._id.toString()] || [],
-  }));
+  // Lấy thông tin giao hàng
+  const shipInfo = await OrderShipInfo.findOne({ orderId }).lean();
 
   return res.status(200).json({
     success: true,
     data: {
-      ...order.toObject(),
-      items: itemsWithToppings,
-      shipInfo,
+      ...order,
+      shipInfo: shipInfo || null,
     },
   });
 });
@@ -159,39 +118,39 @@ const getOrderDetailForStore = async (req, res) => {
     const { orderId } = req.params;
 
     const order = await Order.findById(orderId)
-      .populate({ path: "store", select: "name avatar", select: "name" })
-      .populate({ path: "user", select: "name email avatar", select: "name email avatar" });
+      .populate({
+        path: "store",
+        select: "name avatar",
+      })
+      .populate({
+        path: "user",
+        select: "name avatar",
+      })
+      .populate({
+        path: "items",
+        populate: [
+          {
+            path: "dish",
+            select: "name price image description",
+          },
+          {
+            path: "toppings",
+          },
+        ],
+      })
+      .lean();
 
     if (!order) {
       return res.status(404).json({ success: false, message: "Order not found" });
     }
 
-    const items = await OrderItem.find({ orderId: order._id });
-    const itemIds = items.map((i) => i._id);
-    const toppings = await OrderItemTopping.find({ orderItemId: { $in: itemIds } });
-    const shipInfo = await OrderShipInfo.findOne({ orderId: order._id });
-
-    const toppingMap = {};
-    toppings.forEach((t) => {
-      const key = t.orderItemId.toString();
-      if (!toppingMap[key]) toppingMap[key] = [];
-      toppingMap[key].push({ toppingName: t.toppingName, price: t.price });
-    });
-
-    const itemsWithToppings = items.map((item) => ({
-      dishName: item.dishName,
-      quantity: item.quantity,
-      price: item.price,
-      note: item.note,
-      toppings: toppingMap[item._id.toString()] || [],
-    }));
+    const shipInfo = await OrderShipInfo.findOne({ orderId }).lean();
 
     return res.status(200).json({
       success: true,
       data: {
-        ...order.toObject(),
-        items: itemsWithToppings,
-        shipInfo,
+        ...order,
+        shipInfo: shipInfo || null,
       },
     });
   } catch (error) {
@@ -206,8 +165,21 @@ const getFinishedOrders = asyncHandler(async (req, res, next) => {
   try {
     const finishedOrders = await Order.find({ status: "finished" })
       .populate({ path: "store", select: "name avatar" })
-      .populate({ path: "user", select: "name email avatar" })
-      .sort({ updatedAt: -1 });
+      .populate({ path: "user", select: "name avatar" })
+      .populate({
+        path: "items",
+        populate: [
+          {
+            path: "dish",
+            select: "name image price",
+          },
+          {
+            path: "toppings",
+          },
+        ],
+      })
+      .sort({ updatedAt: -1 })
+      .lean();
 
     if (!finishedOrders || finishedOrders.length === 0) {
       return res.status(200).json({
@@ -218,48 +190,11 @@ const getFinishedOrders = asyncHandler(async (req, res, next) => {
       });
     }
 
-    const orderIds = finishedOrders.map((o) => o._id);
-
-    const allOrderItems = await OrderItem.find({ orderId: { $in: orderIds } });
-    const allOrderItemIds = allOrderItems.map((item) => item._id);
-    const allToppings = await OrderItemTopping.find({
-      orderItemId: { $in: allOrderItemIds },
-    });
-
-    const toppingMap = {};
-    allToppings.forEach((topping) => {
-      const key = topping.orderItemId.toString();
-      if (!toppingMap[key]) toppingMap[key] = [];
-      toppingMap[key].push({
-        toppingName: topping.toppingName,
-        price: topping.price,
-      });
-    });
-
-    const itemMap = {};
-    allOrderItems.forEach((item) => {
-      const key = item.orderId.toString();
-      if (!itemMap[key]) itemMap[key] = [];
-
-      itemMap[key].push({
-        dishName: item.dishName,
-        quantity: item.quantity,
-        price: item.price,
-        note: item.note,
-        toppings: toppingMap[item._id.toString()] || [],
-      });
-    });
-
-    const enrichedOrders = finishedOrders.map((order) => ({
-      ...order.toObject(),
-      items: itemMap[order._id.toString()] || [],
-    }));
-
     res.status(200).json({
       success: true,
       message: "Lấy danh sách đơn hàng đã hoàn tất thành công.",
-      count: enrichedOrders.length,
-      data: enrichedOrders,
+      count: finishedOrders.length,
+      data: finishedOrders,
     });
   } catch (err) {
     return next(
@@ -278,7 +213,7 @@ const updateOrderStatus = asyncHandler(async (req, res, next) => {
 
   const order = await Order.findById(orderId)
     .populate({ path: "store", select: "name avatar" })
-    .populate({ path: "user", select: "name email avatar" });
+    .populate({ path: "user", select: "name avatar" });
 
   if (!order) {
     return next(createError(404, "Order not found"));
@@ -286,7 +221,6 @@ const updateOrderStatus = asyncHandler(async (req, res, next) => {
 
   const currentStatus = order.status;
 
-  // Validate status transitions
   const validTransitions = {
     taken: ["delivering", "finished"],
     delivering: ["delivered"],
@@ -304,35 +238,31 @@ const updateOrderStatus = asyncHandler(async (req, res, next) => {
   order.status = status;
   await order.save();
 
-  // Truy vấn các món trong đơn
-  const orderItems = await OrderItem.find({ orderId: order._id });
-  const orderItemIds = orderItems.map((item) => item._id);
-  const toppings = await OrderItemTopping.find({ orderItemId: { $in: orderItemIds } });
+  const populatedOrder = await Order.findById(orderId)
+    .populate({ path: "store", select: "name avatar" })
+    .populate({ path: "user", select: "name avatar" })
+    .populate({
+      path: "items",
+      populate: {
+        path: "toppings",
+        select: "toppingName price",
+      },
+    })
+    .lean();
 
-  // Gộp topping theo từng món
-  const toppingMap = {};
-  toppings.forEach((t) => {
-    const key = t.orderItemId.toString();
-    if (!toppingMap[key]) toppingMap[key] = [];
-    toppingMap[key].push({
-      toppingName: t.toppingName,
-      price: t.price,
-    });
-  });
-
-  const items = orderItems.map((item) => ({
+  const items = (populatedOrder.items || []).map((item) => ({
     dishName: item.dishName,
     quantity: item.quantity,
     price: item.price,
     note: item.note,
-    toppings: toppingMap[item._id.toString()] || [],
+    toppings: item.toppings || [],
   }));
 
   res.status(200).json({
     success: true,
     message: `Order status updated to '${status}' successfully`,
     data: {
-      ...order.toObject(),
+      ...populatedOrder,
       items,
     },
   });
@@ -440,97 +370,53 @@ const getMonthlyOrderStats = asyncHandler(async (req, res, next) => {
 
 const getAllOrder = async (req, res) => {
   try {
-    const { status, limit = 10, page = 1, name } = req.query;
-    const { store_id } = req.params;
+    const { status, limit, page, name } = req.query;
+    const { storeId } = req.params;
 
-    if (!mongoose.Types.ObjectId.isValid(store_id)) {
-      return res.status(400).json({ success: false, message: "Invalid store_id format" });
-    }
-
-    let filterOptions = { store: store_id };
+    let filterOptions = { storeId };
 
     if (status) {
       const statusArray = Array.isArray(status) ? status : status.split(",");
       filterOptions.status = { $in: statusArray };
     }
 
+    // Add search filter for customerName or customerPhonenumber
     if (name && name.trim() !== "") {
       const regex = new RegExp(name, "i");
       filterOptions.$or = [{ customerName: regex }, { customerPhonenumber: regex }];
     }
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-    const total = await Order.countDocuments(filterOptions);
-    const orders = await Order.find(filterOptions)
-      .populate({
-        path: "store",
-        select: "name avatar",
-      })
-      .populate("user", "name email avatar")
-      .sort({ updatedAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit));
-
-    // Lấy các OrderItem và Topping tương ứng
-    const orderIds = orders.map((o) => o._id);
-    const orderItems = await OrderItem.find({ orderId: { $in: orderIds } });
-    const itemIds = orderItems.map((item) => item._id);
-    const toppings = await OrderItemTopping.find({ orderItemId: { $in: itemIds } });
-
-    // Gom topping theo orderItemId
-    const toppingMap = {};
-    for (const topping of toppings) {
-      const key = topping.orderItemId.toString();
-      if (!toppingMap[key]) toppingMap[key] = [];
-      toppingMap[key] = [
-        ...(toppingMap[key] || []),
+    const response = await getPaginatedData(
+      Order,
+      filterOptions,
+      [
+        { path: "store", select: "name avatar" },
+        { path: "user", select: "name email avatar" },
         {
-          toppingName: topping.toppingName,
-          price: topping.price,
+          path: "items",
+          populate: [
+            { path: "dish", select: "name price image description" },
+            {
+              path: "toppings",
+            },
+          ],
         },
-      ];
-    }
+      ],
+      limit,
+      page
+    );
 
-    // Gom orderItem theo orderId
-    const itemMap = {};
-    for (const item of orderItems) {
-      const key = item.orderId.toString();
-      if (!itemMap[key]) itemMap[key] = [];
-
-      itemMap[key].push({
-        dishName: item.dishName,
-        quantity: item.quantity,
-        price: item.price,
-        note: item.note,
-        toppings: toppingMap[item._id.toString()] || [],
-      });
-    }
-
-    // Gắn lại vào order
-    const enrichedOrders = orders.map((order) => ({
-      ...order.toObject(),
-      items: itemMap[order._id.toString()] || [],
-    }));
-
-    // Lọc lại nếu cần tìm theo user.name
-    let filtered = enrichedOrders;
+    // Filter in-memory again for user.name
     if (name && name.trim() !== "") {
       const regex = new RegExp(name, "i");
-      filtered = enrichedOrders.filter(
+      response.data = response.data.filter(
         (order) =>
           order.user?.name?.match(regex) || order.customerName?.match(regex) || order.customerPhonenumber?.match(regex)
       );
     }
 
-    res.status(200).json({
-      success: true,
-      total: total,
-      currentPage: parseInt(page),
-      totalPages: Math.ceil(total / limit),
-      data: filtered,
-    });
+    res.status(200).json(response);
   } catch (error) {
-    console.error(error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -579,74 +465,60 @@ const reOrder = async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid orderId" });
     }
 
-    const order = await Order.findById(orderId);
+    const order = await Order.findById(orderId)
+      .populate("store")
+      .populate({
+        path: "items",
+        populate: [{ path: "dish", select: "stockStatus" }, { path: "toppings" }],
+      });
+
     if (!order || !order.store) {
       return res.status(404).json({ success: false, message: "Order not found" });
     }
 
-    const store = await Store.findById(order.store);
-    if (!store || store.status === "BLOCKED") {
-      return res.status(403).json({ success: false, message: "Cannot reorder from a blocked or missing store" });
+    if (order.store.status === "BLOCKED") {
+      return res.status(403).json({ success: false, message: "Cannot reorder from a blocked store" });
     }
 
-    // Lấy các món trong đơn
-    const orderItems = await OrderItem.find({ orderId });
-    const itemIds = orderItems.map((i) => i._id);
-    const toppings = await OrderItemTopping.find({ orderItemId: { $in: itemIds } });
-
     // Kiểm tra món nào đã hết hàng
-    const dishIds = orderItems.map((item) => item.dishId);
-    const dishes = await Dish.find({ _id: { $in: dishIds } });
-    const dishStatusMap = {};
-    dishes.forEach((dish) => {
-      dishStatusMap[dish._id.toString()] = dish.stockStatus;
-    });
-
-    const hasOutOfStock = orderItems.some((item) => {
-      const status = dishStatusMap[item.dishId?.toString()];
-      return status === "OUT_OF_STOCK";
-    });
+    const hasOutOfStock = order.items.some((item) => item.dish?.stockStatus === "OUT_OF_STOCK");
 
     if (hasOutOfStock) {
       return res.status(403).json({ success: false, message: "Some dishes are out of stock" });
     }
 
-    // Clear cart cũ nếu có
-    const existingCart = await Cart.findOne({ user: userId, store: store._id });
-    if (existingCart) {
-      await CartItemTopping.deleteMany({
-        cartItemId: { $in: await CartItem.find({ cartId: existingCart._id }).distinct("_id") },
-      });
-      await CartItem.deleteMany({ cartId: existingCart._id });
-      await Cart.deleteOne({ _id: existingCart._id });
+    // Xoá cart cũ nếu tồn tại
+    const oldCart = await Cart.findOne({ userId, storeId: order.store._id });
+    if (oldCart) {
+      const oldCartItemIds = await CartItem.find({ cartId: oldCart._id }).distinct("_id");
+      await CartItemTopping.deleteMany({ cartItemId: { $in: oldCartItemIds } });
+      await CartItem.deleteMany({ cartId: oldCart._id });
+      await Cart.deleteOne({ _id: oldCart._id });
     }
 
-    // Tạo lại Cart mới
-    const newCart = await Cart.create({
-      user: userId,
-      store: store._id,
-    });
+    // Tạo giỏ hàng mới
+    const newCart = await Cart.create({ userId, storeId: order.store._id });
 
-    // Thêm CartItem và CartItemTopping
-    for (const orderItem of orderItems) {
+    // Lặp qua các món cũ và tạo mới trong giỏ hàng
+    for (const item of order.items) {
       const cartItem = await CartItem.create({
         cartId: newCart._id,
-        dishId: orderItem.dishId,
-        dishName: orderItem.dishName,
-        quantity: orderItem.quantity,
-        price: orderItem.price,
-        note: orderItem.note,
+        dishId: item.dishId,
+        dishName: item.dishName,
+        quantity: item.quantity,
+        price: item.price,
+        note: item.note,
       });
 
-      const itemToppings = toppings.filter((t) => t.orderItemId.toString() === orderItem._id.toString());
-
-      for (const topping of itemToppings) {
-        await CartItemTopping.create({
+      // Nếu có topping thì thêm vào
+      if (item.toppings?.length) {
+        const toppingDocs = item.toppings.map((t) => ({
           cartItemId: cartItem._id,
-          toppingId: topping.toppingId,
-          toppingName: topping.toppingName,
-          price: topping.price,
-        });
+          toppingId: t.toppingId,
+          toppingName: t.toppingName,
+          price: t.price,
+        }));
+        await CartItemTopping.insertMany(toppingDocs);
       }
     }
 
@@ -657,7 +529,7 @@ const reOrder = async (req, res) => {
     });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ success: false, message: error.message });
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
 

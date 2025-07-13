@@ -24,4 +24,11 @@ var orderItemToppingSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+orderItemToppingSchema.virtual("topping", {
+  ref: "Topping",
+  localField: "toppingId",
+  foreignField: "_id",
+  justOne: true,
+});
+
 module.exports = mongoose.model("OrderItemTopping", orderItemToppingSchema);

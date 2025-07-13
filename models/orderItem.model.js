@@ -29,7 +29,20 @@ var orderItemSchema = new mongoose.Schema(
       required: false,
     },
   },
-  { timestamps: true }
+  { timestamps: true, toObject: { virtuals: true }, toJSON: { virtuals: true } }
 );
+
+orderItemSchema.virtual("dish", {
+  ref: "Dish",
+  localField: "dishId",
+  foreignField: "_id",
+  justOne: true,
+});
+
+orderItemSchema.virtual("toppings", {
+  ref: "OrderItemTopping",
+  localField: "_id",
+  foreignField: "orderItemId",
+});
 
 module.exports = mongoose.model("OrderItem", orderItemSchema);
