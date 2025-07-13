@@ -21,11 +21,11 @@ const ratingSchema = new mongoose.Schema(
       type: Number,
       required: true,
       min: 1,
-      max: 5, // 1-5 star rating system
+      max: 5,
     },
     comment: {
       type: String,
-      default: "", // Empty string if no comment
+      default: "",
     },
     images: [
       {
@@ -34,7 +34,35 @@ const ratingSchema = new mongoose.Schema(
       },
     ],
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    toObject: { virtuals: true }, // Bật virtual khi dùng .toObject()
+    toJSON: { virtuals: true }, // Bật virtual khi dùng .toJSON()
+  }
 );
+
+// Virtual để gọi là `user` thay vì `userId`
+ratingSchema.virtual("user", {
+  ref: "User",
+  localField: "userId",
+  foreignField: "_id",
+  justOne: true,
+});
+
+// Virtual để gọi là `store` thay vì `storeId`
+ratingSchema.virtual("store", {
+  ref: "Store",
+  localField: "storeId",
+  foreignField: "_id",
+  justOne: true,
+});
+
+// Virtual để gọi là `order` thay vì `orderId`
+ratingSchema.virtual("order", {
+  ref: "Order",
+  localField: "orderId",
+  foreignField: "_id",
+  justOne: true,
+});
 
 module.exports = mongoose.model("Rating", ratingSchema);

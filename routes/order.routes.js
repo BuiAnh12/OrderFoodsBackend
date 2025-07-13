@@ -24,7 +24,7 @@ router.get("/finished", authMiddleware, getFinishedOrders);
 router.get("/stats", getOrderStats);
 router.get("/:orderId", authMiddleware, validateMongoDbId("orderId"), getOrderDetail);
 router.get("/:orderId/store", authMiddleware, validateMongoDbId("orderId"), getOrderDetailForStore);
-router.get("/store/:store_id", getAllOrder);
+router.get("/store/:storeId", validateMongoDbId("storeId"), getAllOrder);
 
 router.post("/re-order/:orderId", authMiddleware, reOrder);
 
