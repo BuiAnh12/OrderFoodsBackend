@@ -22,38 +22,59 @@ const getUserCart = async (req, res) => {
         message: "User not found",
       });
     }
-    // Tạo bộ lọc tìm kiếm
-    let filter = { user: userId };
 
-    // Truy vấn danh sách món ăn
-    let allCarts = await Cart.find(filter)
+    const carts = await Cart.find({ userId })
       .populate({
         path: "store",
+        populate: { path: "storeCategory" },
+      })
+      .populate({
+        path: "items",
+        populate: [
+          {
+            path: "dish",
+            select: "name price image description",
+          },
+          {
+            path: "toppings",
+            populate: {
+              path: "topping",
+              select: "name price",
+            },
+          },
+        ],
       })
       .lean();
 
-    if (!allCarts || allCarts.length === 0) {
+    if (!carts || carts.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Carts not found",
       });
     }
 
-    allCarts = allCarts.filter((cart) => cart.store.status === "APPROVED");
+    // Lọc các cart của store đã được duyệt
+    const approvedCarts = carts.filter((cart) => cart.store?.status === "APPROVED");
 
     const storeRatings = await Rating.aggregate([
-      { $group: { _id: "$store", avgRating: { $avg: "$ratingValue" }, amountRating: { $sum: 1 } } },
+      {
+        $group: {
+          _id: "$storeId",
+          avgRating: { $avg: "$ratingValue" },
+          amountRating: { $sum: 1 },
+        },
+      },
     ]);
 
-    const updatedCarts = allCarts.map((cart) => {
+    const updatedCarts = approvedCarts.map((cart) => {
       const rating = storeRatings.find((r) => r._id.toString() === cart.store._id.toString());
 
       return {
         ...cart,
         store: {
           ...cart.store,
-          avgRating: rating ? rating.avgRating : 0,
-          amountRating: rating ? rating.amountRating : 0,
+          avgRating: rating?.avgRating || 0,
+          amountRating: rating?.amountRating || 0,
         },
       };
     });
@@ -63,7 +84,7 @@ const getUserCart = async (req, res) => {
       data: updatedCarts,
     });
   } catch (error) {
-    console.log(error);
+    console.error(error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -80,49 +101,39 @@ const getDetailCart = async (req, res) => {
       return res.status(400).json({ success: false, message: "Cart ID is required" });
     }
 
-    // 1. Lấy thông tin cart
-    const cart = await Cart.findById(cartId).populate({
-      path: "store",
-      populate: { path: "storeCategory" },
-    });
+    const cart = await Cart.findById(cartId)
+      .populate({
+        path: "store",
+        populate: { path: "storeCategory", select: "name" },
+      })
+      .populate({
+        path: "items",
+        populate: [
+          {
+            path: "dish",
+            select: "name image price description",
+          },
+          {
+            path: "toppings",
+            populate: {
+              path: "topping",
+              select: "name price",
+            },
+          },
+        ],
+      })
+      .lean();
 
-    if (!cart || cart.user.toString() !== userId.toString()) {
+    if (!cart || cart.userId.toString() !== userId.toString()) {
       return res.status(404).json({ success: false, message: "Cart not found" });
     }
-
-    // 2. Lấy danh sách cart items
-    const cartItems = await CartItem.find({ cartId: cart._id }).populate("dishId");
-
-    // 3. Lấy toppings của từng cart item
-    const cartItemIds = cartItems.map((item) => item._id);
-    const allToppings = await CartItemTopping.find({ cartItemId: { $in: cartItemIds } }).populate("toppingId");
-
-    // 4. Ghép toppings vào từng cart item
-    const itemsWithToppings = cartItems.map((item) => {
-      const toppings = allToppings
-        .filter((t) => t.cartItemId.toString() === item._id.toString())
-        .map((t) => ({
-          toppingId: t.toppingId._id,
-          toppingName: t.toppingName,
-          price: t.price,
-        }));
-
-      return {
-        _id: item._id,
-        dishId: item.dishId._id,
-        dishName: item.dishName,
-        quantity: item.quantity,
-        price: item.price,
-        toppings,
-      };
-    });
 
     res.status(200).json({
       success: true,
       data: {
         cartId: cart._id,
         store: cart.store,
-        items: itemsWithToppings,
+        items: cart.items,
       },
     });
   } catch (error) {

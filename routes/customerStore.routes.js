@@ -5,13 +5,14 @@ const {
   getAllDishInStore,
   getDetailDish,
 } = require("../controllers/customerStore.controller");
+const validateMongoDbId = require("../middlewares/validateMongoDBId");
 
 const router = express.Router();
 
 router.get("/", getAllStore);
-router.get("/:store_id", getStoreInformation);
+router.get("/:storeId", validateMongoDbId("storeId"), getStoreInformation);
 
-router.get("/:store_id/dish", getAllDishInStore);
-router.get("/dish/:dish_id", getDetailDish);
+router.get("/:storeId/dish", validateMongoDbId("storeId"), getAllDishInStore);
+router.get("/dish/:dishId", validateMongoDbId("dishId"), getDetailDish);
 
 module.exports = router;
