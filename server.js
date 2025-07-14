@@ -25,6 +25,7 @@ const notificationRoute = require("./routes/notification.routes");
 const userRoute = require("./routes/user.routes");
 const uploadRoute = require("./routes/upload.routes");
 const ratingRoute = require("./routes/rating.routes");
+const dishRoute = require("./routes/dish.routes");
 
 const app = express();
 connectDB();
@@ -81,6 +82,7 @@ app.use("/api/v1/notification", notificationRoute);
 app.use("/api/v1/user", userRoute);
 app.use("/api/v1/upload", uploadRoute);
 app.use("/api/v1/rating", ratingRoute);
+app.use("/api/v1/dish", dishRoute);
 
 app.use(errorHandler);
 
