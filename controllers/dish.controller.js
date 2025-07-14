@@ -9,7 +9,7 @@ const getDishById = asyncHandler(async (req, res) => {
     const { dish_id } = req.params;
 
     if (!dish_id) {
-        next(createError(400, "Dish ID is required"));
+        return next(createError(400, "Dish ID is required"));
     }
 
     const dish = await Dish.findById(dish_id)
@@ -20,7 +20,7 @@ const getDishById = asyncHandler(async (req, res) => {
         .populate("category", "_id name");
 
     if (!dish) {
-        next(createError(404, "Dish not found"));
+        return next(createError(404, "Dish not found"));
     }
 
     res.status(200).json(successResponse(dish, "Dish retrieved successfully"));
@@ -30,7 +30,7 @@ const getDishesByStoreId = asyncHandler(async (req, res, next) => {
     const { store_id } = req.params;
     const { name , limit , page  } = req.query;
     if (!store_id) {
-        next(createError(400, "store ID is required"));
+        return next(createError(400, "store ID is required"));
     }
     let filterOptions = { storeId: new mongoose.Types.ObjectId(store_id) };
     if (name) filterOptions.name = { $regex: name, $options: "i" };
