@@ -1,4 +1,4 @@
-const FoodType = require("../models/foodType.model");
+const SystemCategory = require("../models/systemCategory.model");
 const Category = require("../models/category.model");
 const ToppingGroup = require("../models/toppingGroup.model");
 const Topping = require("../models/topping.model");
