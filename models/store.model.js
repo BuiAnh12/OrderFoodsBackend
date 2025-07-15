@@ -21,7 +21,7 @@ const storeSchema = new mongoose.Schema(
     storeCategory: [
       {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "FoodType",
+        ref: "SystemCategory",
       },
     ],
     avatar: { filePath: String, url: String },
