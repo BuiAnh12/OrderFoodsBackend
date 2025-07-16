@@ -30,6 +30,7 @@ const toppingRoute = require("./routes/topping.routes");
 const categoryRoute = require("./routes/category.routes");
 const statisticsRoute = require("./routes/statistics.routes");
 const systemCategoryRoute = require("./routes/systemCategory.routes");
+const voucherRoute = require("./routes/voucher.routes");
 
 
 const app = express();
@@ -92,6 +93,7 @@ app.use("/api/v1/topping", toppingRoute);
 app.use("/api/v1/category", categoryRoute);
 app.use("/api/v1/statistics", statisticsRoute);
 app.use("/api/v1/system-category", systemCategoryRoute);
+app.use("/api/v1/voucher", voucherRoute);
 
 app.use(errorHandler);
 

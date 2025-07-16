@@ -15,17 +15,13 @@ var voucherSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    description: {
-      type: String,
-      required: true,
-    },
     discountType: {
       type: String,
       enum: ["PERCENTAGE", "FIXED"],
       required: true,
     },
     discountValue: {
-      type: Boolean,
+      type: Number,
       required: true,
     },
     maxDiscount: {
