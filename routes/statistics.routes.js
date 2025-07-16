@@ -16,6 +16,7 @@ const {
     newCustomers,
     returningCustomerRate,
     averageSpendingPerOrder,
+    voucherUsageSummary,
 
 } = require("../controllers/statistics.controller");
 
@@ -42,5 +43,8 @@ router.get("/customers/new", authMiddleware, newCustomers);
 router.get("/customers/returning-rate", authMiddleware, returningCustomerRate);
 router.get("/customers/average-spending", authMiddleware, averageSpendingPerOrder);
 
+router.get("/vouchers/usage-summary", authMiddleware, voucherUsageSummary);
+router.get("/vouchers/top-used", authMiddleware, voucherUsageSummary);
+router.get("/vouchers/revenue-impact", authMiddleware, voucherUsageSummary);
 
 module.exports = router;

@@ -2,6 +2,8 @@ const Order = require("../models/order.model");
 const Store = require("../models/store.model");
 const Voucher = require("../models/voucher.model");
 const OrderItem = require("../models/orderItem.model");
+const OrderVoucher = require("../models/orderVoucher.model");
+const UserVoucherUsage = require("../models/userVoucherUsage.model");
 const moment = require("moment-timezone");
 const asyncHandler = require("express-async-handler");
 const successResponse = require("../utils/successResponse");
@@ -14,6 +16,27 @@ const getStoreIdFromUser = async (userId) => {
     });
     if (!store) throw createError(404, "Store not found");
     return store._id;
+};
+
+const parseDateRange = (from, to) => {
+    if (!from || !to) {
+        throw createError(
+            400,
+            "Both 'from' and 'to' query parameters are required"
+        );
+    }
+    const startDate = moment(from, "YYYY-MM-DD", true);
+    const endDate = moment(to, "YYYY-MM-DD", true);
+    if (!startDate.isValid() || !endDate.isValid()) {
+        throw createError(400, "Invalid date format. Use YYYY-MM-DD");
+    }
+    if (endDate.isBefore(startDate)) {
+        throw createError(400, "'to' date must be after 'from' date");
+    }
+    return {
+        startDate: startDate.startOf("day").utc().toDate(),
+        endDate: endDate.endOf("day").utc().toDate(),
+    };
 };
 
 const getRevenueSummary = asyncHandler(async (req, res, next) => {
@@ -869,6 +892,310 @@ const averageSpendingPerOrder = asyncHandler(async (req, res) => {
         .json(successResponse(result[0] || { averageSpending: 0 }));
 });
 
+// Controller for voucher usage summary
+const voucherUsageSummary = asyncHandler(async (req, res, next) => {
+    const userId = req.user._id;
+    const { from, to } = req.query;
+
+    // 1. Validate and parse date range
+    let startDate, endDate;
+    if (from && to) {
+        const start = moment(from, "YYYY-MM-DD", true);
+        const end = moment(to, "YYYY-MM-DD", true);
+        if (!start.isValid() || !end.isValid()) {
+            throw createError(400, "Invalid date format. Use YYYY-MM-DD");
+        }
+        if (end.isBefore(start)) {
+            throw createError(400, "'to' date must be after 'from' date");
+        }
+        startDate = start.startOf("day").utc().toDate();
+        endDate = end.endOf("day").utc().toDate();
+    } else {
+        // Default to last 30 days if from/to are missing or invalid
+        ({ startDate, endDate } = parseDateRange());
+    }
+
+    // 2. Get store ID
+    const storeId = await getStoreIdFromUser(userId);
+
+    // 3. Get date boundaries for today, week, and month
+    const now = moment().tz("Asia/Ho_Chi_Minh");
+    const startDates = {
+        today: now.clone().startOf("day").utc().toDate(),
+        week: now.clone().startOf("isoWeek").utc().toDate(),
+        month: now.clone().startOf("month").utc().toDate(),
+    };
+
+    // 4. Get all voucher IDs for the store
+    const storeVouchers = await Voucher.find({ storeId }).select("_id");
+    const voucherIds = storeVouchers.map((voucher) => voucher._id);
+
+    if (!voucherIds.length) {
+        return res.status(200).json(
+            successResponse({
+                totalUsedToday: 0,
+                totalUsedThisWeek: 0,
+                totalUsedThisMonth: 0,
+                requestedTimeFrameUsed: 0,
+            })
+        );
+    }
+
+    // 5. Aggregate total voucher usage for today, week, month, and requested timeframe
+    const usageAggregation = await OrderVoucher.aggregate([
+        {
+            $match: {
+                voucherId: { $in: voucherIds },
+                appliedAt: { $gte: startDates.month, $lte: endDate }, // From start of month to 'to' date
+            },
+        },
+        {
+            $facet: {
+                today: [
+                    {
+                        $match: {
+                            appliedAt: { $gte: startDates.today },
+                        },
+                    },
+                    {
+                        $count: "totalUsedToday",
+                    },
+                ],
+                week: [
+                    {
+                        $match: {
+                            appliedAt: { $gte: startDates.week },
+                        },
+                    },
+                    {
+                        $count: "totalUsedThisWeek",
+                    },
+                ],
+                month: [
+                    {
+                        $count: "totalUsedThisMonth",
+                    },
+                ],
+                requestedTimeFrame: [
+                    {
+                        $match: {
+                            appliedAt: { $gte: startDate, $lte: endDate },
+                        },
+                    },
+                    {
+                        $count: "requestedTimeFrameUsed",
+                    },
+                ],
+            },
+        },
+        {
+            $project: {
+                totalUsedToday: { $arrayElemAt: ["$today.totalUsedToday", 0] },
+                totalUsedThisWeek: {
+                    $arrayElemAt: ["$week.totalUsedThisWeek", 0],
+                },
+                totalUsedThisMonth: {
+                    $arrayElemAt: ["$month.totalUsedThisMonth", 0],
+                },
+                requestedTimeFrameUsed: {
+                    $arrayElemAt: [
+                        "$requestedTimeFrame.requestedTimeFrameUsed",
+                        0,
+                    ],
+                },
+            },
+        },
+    ]);
+
+    // 6. Prepare response data
+    const responseData = {
+        totalUsedToday: usageAggregation[0]?.totalUsedToday || 0,
+        totalUsedThisWeek: usageAggregation[0]?.totalUsedThisWeek || 0,
+        totalUsedThisMonth: usageAggregation[0]?.totalUsedThisMonth || 0,
+        requestedTimeFrameUsed:
+            usageAggregation[0]?.requestedTimeFrameUsed || 0,
+    };
+
+    // 7. Send response
+    return res.status(200).json(successResponse(responseData));
+});
+
+const topUsedVouchers = asyncHandler(async (req, res, next) => {
+    const userId = req.user._id;
+    const { limit = 5 } = req.query; // Default limit to 5 if not provided
+
+    // 1. Validate limit parameter
+    const parsedLimit = parseInt(limit);
+    if (isNaN(parsedLimit) || parsedLimit <= 0) {
+        throw createError(400, "Limit must be a positive number");
+    }
+
+    // 2. Get store ID
+    const storeId = await getStoreIdFromUser(userId);
+
+    // 3. Aggregate top used vouchers
+    const topVouchers = await OrderVoucher.aggregate([
+        {
+            // Match vouchers for the store
+            $lookup: {
+                from: Voucher.collection.name,
+                localField: "voucherId",
+                foreignField: "_id",
+                as: "voucherDetails",
+            },
+        },
+        {
+            $unwind: "$voucherDetails",
+        },
+        {
+            $match: {
+                "voucherDetails.storeId": storeId,
+            },
+        },
+        {
+            // Group by voucher and count usage
+            $group: {
+                _id: "$voucherId",
+                code: { $first: "$voucherDetails.code" },
+                discountValue: { $first: "$voucherDetails.discountValue" },
+                usedCount: { $sum: 1 },
+            },
+        },
+        {
+            // Sort by usedCount in descending order
+            $sort: {
+                usedCount: -1,
+            },
+        },
+        {
+            // Limit the results
+            $limit: parsedLimit,
+        },
+        {
+            // Project the final output
+            $project: {
+                _id: 0,
+                code: 1,
+                usedCount: 1,
+                discountValue: 1,
+            },
+        },
+    ]);
+
+    // 4. Send response
+    return res.status(200).json(successResponse(topVouchers));
+});
+
+const voucherRevenueImpact = asyncHandler(async (req, res, next) => {
+    const userId = req.user._id;
+    const { limit = 5 } = req.query; // Default limit to 5 if not provided
+
+    // 1. Validate limit parameter
+    const parsedLimit = parseInt(limit);
+    if (isNaN(parsedLimit) || parsedLimit <= 0) {
+        throw createError(400, "Limit must be a positive number");
+    }
+
+    // 2. Get store ID
+    const storeId = await getStoreIdFromUser(userId);
+
+    // 3. Get all voucher IDs for the store
+    const storeVouchers = await Voucher.find({ storeId }).select("_id");
+    const voucherIds = storeVouchers.map((voucher) => voucher._id);
+
+    if (!voucherIds.length) {
+        return res.status(200).json(
+            successResponse({
+                totalDiscountAmount: 0,
+                revenueBeforeDiscount: 0,
+                revenueAfterDiscount: 0,
+                discountRatio: 0,
+            })
+        );
+    }
+
+    // 4. Aggregate revenue impact
+    const revenueImpact = await OrderVoucher.aggregate([
+        {
+            // Match order vouchers for the store's vouchers
+            $match: {
+                voucherId: { $in: voucherIds },
+            },
+        },
+        {
+            // Lookup voucher details
+            $lookup: {
+                from: Voucher.collection.name,
+                localField: "voucherId",
+                foreignField: "_id",
+                as: "voucherDetails",
+            },
+        },
+        {
+            $unwind: "$voucherDetails",
+        },
+        {
+            // Lookup order details
+            $lookup: {
+                from: Order.collection.name,
+                localField: "orderId",
+                foreignField: "_id",
+                as: "orderDetails",
+            },
+        },
+        {
+            $unwind: "$orderDetails",
+        },
+        {
+            // Group to calculate totals
+            $group: {
+                _id: null,
+                totalDiscountAmount: { $sum: "$voucherDetails.discountValue" },
+                revenueBeforeDiscount: { $sum: "$orderDetails.totalPrice" },
+            },
+        },
+        {
+            // Project final output
+            $project: {
+                _id: 0,
+                totalDiscountAmount: 1,
+                revenueBeforeDiscount: 1,
+                revenueAfterDiscount: {
+                    $subtract: ["$revenueBeforeDiscount", "$totalDiscountAmount"],
+                },
+                discountRatio: {
+                    $cond: {
+                        if: { $eq: ["$revenueBeforeDiscount", 0] },
+                        then: 0,
+                        else: {
+                            $multiply: [
+                                {
+                                    $divide: [
+                                        "$totalDiscountAmount",
+                                        "$revenueBeforeDiscount",
+                                    ],
+                                },
+                                100,
+                            ],
+                        },
+                    },
+                },
+            },
+        },
+    ]);
+
+    // 5. Prepare response data
+    const responseData = revenueImpact[0] || {
+        totalDiscountAmount: 0,
+        revenueBeforeDiscount: 0,
+        revenueAfterDiscount: 0,
+        discountRatio: 0,
+    };
+
+    // 6. Send response
+    return res.status(200).json(successResponse(responseData));
+});
+
 module.exports = {
     getRevenueSummary,
     getStartDates,
@@ -885,4 +1212,7 @@ module.exports = {
     newCustomers,
     returningCustomerRate,
     averageSpendingPerOrder,
+    voucherUsageSummary,
+    topUsedVouchers,
+    voucherRevenueImpact,
 };
