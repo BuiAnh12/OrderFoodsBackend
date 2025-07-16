@@ -29,6 +29,8 @@ const dishRoute = require("./routes/dish.routes");
 const toppingRoute = require("./routes/topping.routes");
 const categoryRoute = require("./routes/category.routes");
 const statisticsRoute = require("./routes/statistics.routes");
+const systemCategoryRoute = require("./routes/systemCategory.routes");
+
 
 const app = express();
 connectDB();
@@ -86,9 +88,10 @@ app.use("/api/v1/user", userRoute);
 app.use("/api/v1/upload", uploadRoute);
 app.use("/api/v1/rating", ratingRoute);
 app.use("/api/v1/dish", dishRoute);
-app.use("/api/v1/topping", toppingRoute)
+app.use("/api/v1/topping", toppingRoute);
 app.use("/api/v1/category", categoryRoute);
 app.use("/api/v1/statistics", statisticsRoute);
+app.use("/api/v1/system-category", systemCategoryRoute);
 
 app.use(errorHandler);
 

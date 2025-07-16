@@ -1,4 +1,4 @@
-const FoodType = require("../models/foodType.model");
+const SystemCategory = require("../models/systemCategory.model");
 const Store = require("../models/store.model");
 const Rating = require("../models/rating.model");
 const Favorite = require("../models/favorite.model");

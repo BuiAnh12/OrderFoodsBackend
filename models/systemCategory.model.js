@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 
-var foodTypeSchema = new mongoose.Schema({
+var systemCategorySchema = new mongoose.Schema({
   name: {
     type: String,
     unique: true,
@@ -16,9 +16,9 @@ var foodTypeSchema = new mongoose.Schema({
   },
 });
 
-foodTypeSchema.statics.isNameExists = async function (foodName) {
+systemCategorySchema.statics.isNameExists = async function (foodName) {
   const food = await this.findOne({ name: foodName }).exec();
   return food !== null;
 };
 
-module.exports = mongoose.model("FoodType", foodTypeSchema);
+module.exports = mongoose.model("SystemCategory", systemCategorySchema);
