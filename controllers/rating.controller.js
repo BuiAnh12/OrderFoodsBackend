@@ -35,7 +35,7 @@ const getAllStoreRating = asyncHandler(async (req, res, next) => {
             {
               path: "items",
               populate: {
-                path: "orderItemToppings",
+                path: "toppings",
               },
             },
           ],

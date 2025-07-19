@@ -145,7 +145,7 @@ const getDetailCart = async (req, res) => {
 const updateCart = async (req, res) => {
   try {
     const userId = req?.user?._id;
-    const { storeId, dishId, quantity, toppings = [] } = req.body;
+    const { storeId, dishId, quantity, toppings = [], note } = req.body;
 
     if (!userId) {
       return res.status(401).json({ success: false, message: "User not found" });
@@ -179,16 +179,16 @@ const updateCart = async (req, res) => {
       }
     }
 
-    // 1. Find or create Cart
-    let cart = await Cart.findOne({ user: userId, store: storeId });
+    // Find or create Cart
+    let cart = await Cart.findOne({ userId, storeId });
     if (!cart) {
       if (quantity === 0) {
         return res.status(400).json({ success: false, message: "Cannot add item with quantity 0" });
       }
-      cart = await Cart.create({ user: userId, store: storeId });
+      cart = await Cart.create({ userId, storeId });
     }
 
-    // 2. Check if CartItem exists
+    // Check if CartItem exists
     let cartItem = await CartItem.findOne({ cartId: cart._id, dishId: dishId });
 
     if (cartItem) {
@@ -199,6 +199,7 @@ const updateCart = async (req, res) => {
       } else {
         // Cập nhật CartItem
         cartItem.quantity = quantity;
+        cartItem.note = note;
         await cartItem.save();
 
         // Xóa và tạo lại CartItemTopping
@@ -225,6 +226,7 @@ const updateCart = async (req, res) => {
           dishName: dish.name,
           quantity,
           price: dish.price,
+          note,
         });
 
         for (const toppingId of toppings) {
@@ -241,7 +243,7 @@ const updateCart = async (req, res) => {
       }
     }
 
-    // 3. Kiểm tra nếu cart không còn CartItem nào thì xóa Cart
+    // Kiểm tra nếu cart không còn CartItem nào thì xóa Cart
     const remainingItems = await CartItem.find({ cartId: cart._id });
     if (remainingItems.length === 0) {
       await Cart.findByIdAndDelete(cart._id);
@@ -270,7 +272,7 @@ const clearCartItem = async (req, res) => {
       return res.status(400).json({ success: false, message: "Store ID is required" });
     }
 
-    const cart = await Cart.findOne({ user: userId, store: storeId });
+    const cart = await Cart.findOne({ userId, storeId });
     if (!cart) {
       return res.status(404).json({ success: false, message: "Cart not found" });
     }
@@ -297,7 +299,7 @@ const clearCart = async (req, res) => {
       return res.status(401).json({ success: false, message: "User not found" });
     }
 
-    const carts = await Cart.find({ user: userId });
+    const carts = await Cart.find({ userId });
     const cartIds = carts.map((cart) => cart._id);
 
     const cartItems = await CartItem.find({ cartId: { $in: cartIds } });
@@ -305,7 +307,7 @@ const clearCart = async (req, res) => {
 
     await CartItemTopping.deleteMany({ cartItemId: { $in: cartItemIds } });
     await CartItem.deleteMany({ cartId: { $in: cartIds } });
-    await Cart.deleteMany({ user: userId });
+    await Cart.deleteMany({ userId });
 
     res.status(200).json({ success: true, message: "All carts cleared successfully" });
   } catch (error) {
@@ -338,7 +340,7 @@ const completeCart = async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid request body" });
     }
 
-    const cart = await Cart.findOne({ user: userId, store: storeId });
+    const cart = await Cart.findOne({ userId, storeId });
     if (!cart) {
       return res.status(400).json({ success: false, message: "Cart not found" });
     }
@@ -351,8 +353,8 @@ const completeCart = async (req, res) => {
     let subtotal = 0;
 
     const newOrder = await Order.create({
-      user: userId,
-      store: storeId,
+      userId,
+      storeId,
       paymentMethod,
       status: "pending",
       subtotalPrice: 0, // Tạm thời 0, lát cập nhật lại
@@ -427,7 +429,6 @@ const completeCart = async (req, res) => {
     return res.status(201).json({
       success: true,
       message: "Order placed successfully",
-      order: newOrder,
     });
   } catch (error) {
     console.error(error);

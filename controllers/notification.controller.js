@@ -20,21 +20,19 @@ const getNotifications = asyncHandler(async (req, res, next) => {
 
 const updateNotification = asyncHandler(async (req, res, next) => {
   try {
-    const notification = await Notification.findById(req.params.id);
-
+    const notiId = req.params.id;
+    const notification = await Notification.findById(notiId);
     if (!notification) {
-      next(createError(404, "Notification not found"));
+      next(createError(404, { message: "Notification not found" }));
     } else {
       notification.status ? (notification.status = "read") : notification?.status;
     }
 
     await notification.save();
 
-    const notifications = await Notification.find().sort({ createdAt: -1 });
-
     res.status(200).json({
       success: true,
-      data: notifications,
+      message: "Update notification successfully!",
     });
   } catch (error) {
     next(error);
