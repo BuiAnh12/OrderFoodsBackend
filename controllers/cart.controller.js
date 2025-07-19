@@ -145,7 +145,7 @@ const getDetailCart = async (req, res) => {
 const updateCart = async (req, res) => {
   try {
     const userId = req?.user?._id;
-    const { storeId, dishId, quantity, toppings = [] } = req.body;
+    const { storeId, dishId, quantity, toppings = [], note } = req.body;
 
     if (!userId) {
       return res.status(401).json({ success: false, message: "User not found" });
@@ -179,7 +179,7 @@ const updateCart = async (req, res) => {
       }
     }
 
-    // 1. Find or create Cart
+    // Find or create Cart
     let cart = await Cart.findOne({ userId, storeId });
     if (!cart) {
       if (quantity === 0) {
@@ -188,7 +188,7 @@ const updateCart = async (req, res) => {
       cart = await Cart.create({ userId, storeId });
     }
 
-    // 2. Check if CartItem exists
+    // Check if CartItem exists
     let cartItem = await CartItem.findOne({ cartId: cart._id, dishId: dishId });
 
     if (cartItem) {
@@ -199,6 +199,7 @@ const updateCart = async (req, res) => {
       } else {
         // Cập nhật CartItem
         cartItem.quantity = quantity;
+        cartItem.note = note;
         await cartItem.save();
 
         // Xóa và tạo lại CartItemTopping
@@ -225,6 +226,7 @@ const updateCart = async (req, res) => {
           dishName: dish.name,
           quantity,
           price: dish.price,
+          note,
         });
 
         for (const toppingId of toppings) {
@@ -241,7 +243,7 @@ const updateCart = async (req, res) => {
       }
     }
 
-    // 3. Kiểm tra nếu cart không còn CartItem nào thì xóa Cart
+    // Kiểm tra nếu cart không còn CartItem nào thì xóa Cart
     const remainingItems = await CartItem.find({ cartId: cart._id });
     if (remainingItems.length === 0) {
       await Cart.findByIdAndDelete(cart._id);
@@ -427,7 +429,6 @@ const completeCart = async (req, res) => {
     return res.status(201).json({
       success: true,
       message: "Order placed successfully",
-      order: newOrder,
     });
   } catch (error) {
     console.error(error);
