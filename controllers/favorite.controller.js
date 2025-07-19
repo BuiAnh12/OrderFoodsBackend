@@ -10,7 +10,10 @@ const getUserFavorite = async (req, res) => {
     const favorite = await Favorite.findOne({ userId })
       .populate({
         path: "store",
-        select: "name avatar status",
+        select: "name avatar status storeCategory",
+        populate: {
+          path: "storeCategory",
+        },
       })
       .lean();
 
