@@ -8,22 +8,22 @@ const addLocation = asyncHandler(async (req, res, next) => {
 
   try {
     if (!userId) {
-      next(createError(400, "User ID is required"));
+      next(createError(400, { success: false, message: "User ID is required" }));
     }
 
     if (["home", "company"].includes(type)) {
       const existingLocation = await Location.findOne({ userId, type });
       if (existingLocation) {
-        return next(createError(400, `You can only have one ${type} location.`));
+        return next(createError(400, { success: false, message: `You can only have one ${type} location.` }));
       }
     }
 
-    const location = await Location.create({
+    await Location.create({
       ...req.body,
       userId,
     });
 
-    res.status(201).json(location);
+    res.status(201).json({ success: true, message: "Add location successfully!" });
   } catch (error) {
     next(createError(500, error.message));
   }
@@ -36,10 +36,13 @@ const getLocation = asyncHandler(async (req, res, next) => {
     const location = await Location.findById(id);
 
     if (!location) {
-      next(createError(404, "Location not found"));
+      next(createError(404, { success: false, message: "Location not found" }));
     }
 
-    res.status(200).json(location);
+    res.status(200).json({
+      success: true,
+      data: location,
+    });
   } catch (error) {
     next(error);
   }
@@ -50,12 +53,15 @@ const getUserLocations = asyncHandler(async (req, res, next) => {
 
   try {
     if (!userId) {
-      next(createError(400, "User ID is required"));
+      next(createError(400, { success: false, message: "User ID is required" }));
     }
 
     const locations = await Location.find({ userId });
 
-    res.status(200).json(locations);
+    res.status(200).json({
+      success: true,
+      data: locations,
+    });
   } catch (error) {
     next(error);
   }
@@ -67,12 +73,12 @@ const updateLocation = asyncHandler(async (req, res, next) => {
   try {
     const existingLocation = await Location.findById(id);
     if (!existingLocation) {
-      next(createError(404, "Location not found"));
+      next(createError(404, { success: false, message: "Location not found" }));
     }
 
-    const location = await Location.findByIdAndUpdate(id, { $set: req.body }, { new: true, runValidators: true });
+    await Location.findByIdAndUpdate(id, { $set: req.body }, { new: true, runValidators: true });
 
-    res.status(200).json(location);
+    res.status(200).json({ success: true, message: "Update location successfully!" });
   } catch (error) {
     next(error);
   }
@@ -84,12 +90,12 @@ const deleteLocation = asyncHandler(async (req, res, next) => {
   try {
     const existingLocation = await Location.findById(id);
     if (!existingLocation) {
-      next(createError(404, "Location not found"));
+      next(createError(404, { success: false, message: "Location not found" }));
     }
 
-    const location = await Location.findByIdAndDelete(id);
+    await Location.findByIdAndDelete(id);
 
-    res.status(200).json(location);
+    res.status(200).json({ success: true, message: "Delete location successfully!" });
   } catch (error) {
     next(error);
   }
