@@ -30,7 +30,7 @@ const storeOwnByUser = asyncHandler(async (req, res, next) => {
   });
 
   if (!findStore) {
-    return res.status(404).json({ message: "No store found for this user" });
+    return res.status(404).json({ success: false, message: "No store found for this user" });
   }
 
   res.status(200).json({ data: findStore });
@@ -47,9 +47,9 @@ const register = asyncHandler(async (req, res, next) => {
       gender,
       password,
     });
-    res.status(201).json("Tạo tài khoản thành công");
+    res.status(201).json({ success: true, message: "Tạo tài khoản thành công" });
   } else {
-    next(createError(409, "Tài khoản đã tồn tại"));
+    next(createError(409, { success: false, message: "Tài khoản đã tồn tại" }));
   }
 });
 
@@ -96,38 +96,12 @@ const checkRegisterStoreOwner = asyncHandler(async (req, res, next) => {
   }
 });
 
-const registerShipper = asyncHandler(async (req, res, next) => {
-  const { name, email, phonenumber, gender, password, avatar, vehicle } = req.body;
-
-  // Kiểm tra email đã tồn tại chưa
-  const findShipper = await Shipper.findOne({ email });
-  if (findShipper) {
-    return next(createError(409, "Tài khoản đã tồn tại"));
-  }
-
-  // Tạo tài khoản shipper mới, thêm avatar vào database
-  const newShipper = await Shipper.create({
-    name,
-    email,
-    phonenumber,
-    gender,
-    password,
-    vehicle,
-    ...(avatar && { avatar }), // Nếu không có ảnh thì để trống
-  });
-
-  res.status(201).json({
-    message: "Tạo tài khoản thành công",
-    shipperId: newShipper._id,
-  });
-});
-
 const login = asyncHandler(async (req, res, next) => {
   const { email, password } = req.body;
   const { getRole, getStore } = req.query; // Get query params for role and store info
 
   if (!email || !password) {
-    next(createError(400, "Vui lòng điền đầy đủ thông tin"));
+    next(createError(400, { success: false, message: "Vui lòng điền đầy đủ thông tin" }));
   }
 
   const findUser = await User.findOne({ email: email });
@@ -151,7 +125,7 @@ const login = asyncHandler(async (req, res, next) => {
       ...(getStore === "true" && store && { storeId: store._id, ownerId: store.owner }), // Include storeId & name if requested
     });
   } else {
-    return next(createError(401, "Email hoặc mật khẩu không hợp lệ!"));
+    return next(createError(401, { success: false, message: "Email hoặc mật khẩu không hợp lệ!" }));
   }
 });
 
@@ -161,7 +135,7 @@ const googleLoginWithToken = asyncHandler(async (req, res, next) => {
   try {
     const { token } = req.body;
     console.log(token);
-    if (!token) return res.status(400).json({ error: "No token provided" });
+    if (!token) return res.status(400).json({ success: false, message: "No token provided" });
 
     const ticket = await client.verifyIdToken({
       idToken: token,
@@ -176,7 +150,7 @@ const googleLoginWithToken = asyncHandler(async (req, res, next) => {
       newUser = new User({
         name: payload.name,
         email: payload.email,
-        password: "123456789",
+        password: "zxczczczcasfafhgmjh,hnfhrhdssdsdvsvx1232311131684535252131sdvvsvs",
         avatar: {
           filePath: "",
           url: payload.picture,
@@ -221,57 +195,38 @@ const googleLoginWithToken = asyncHandler(async (req, res, next) => {
           token: generateAccessToken(user?._id),
         });
       } else {
-        next(createError(409, "Tài khoản đã tồn tại"));
+        next(createError(409, { success: false, message: "Tài khoản đã tồn tại" }));
       }
     }
   } catch (error) {
     console.log(error);
-    return next(createError(500, "Google authentication failed!"));
+    return next(createError(500, { success: false, message: "Google authentication failed!" }));
   }
 });
 
 const getRefreshToken = asyncHandler(async (req, res, next) => {
   const cookie = req?.cookies;
   if (!cookie?.refreshToken) {
-    return next(createError(404, "No refresh token in cookies"));
+    return next(createError(404, { success: false, message: "No refresh token in cookies" }));
   }
 
   const refreshToken = cookie.refreshToken;
   const user = await User.findOne({ refreshToken });
   if (!user) {
-    return next(createError(404, "No refresh token present in database or not matched"));
+    return next(createError(404, { success: false, message: "No refresh token present in database or not matched" }));
   }
 
   jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET, (err, decoded) => {
-    if (err || user.id !== decoded.id) return next(createError("400", "There is something wrong with refresh token"));
+    if (err || user.id !== decoded.id)
+      return next(createError("400", { success: false, message: "There is something wrong with refresh token" }));
     const accessToken = generateAccessToken(user?._id);
     res.status(200).json({ accessToken });
   });
 });
 
-const getRefreshTokenMobile = asyncHandler(async (req, res, next) => {
-  const refreshToken = req.query?.refreshToken;
-  if (!refreshToken) {
-    return next(createError(404, "No refresh token provided"));
-  }
-
-  const user = await User.findOne({ refreshToken });
-  if (!user) {
-    return next(createError(404, "No refresh token present in database or not matched"));
-  }
-
-  jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET, (err, decoded) => {
-    if (err || user.id !== decoded.id) {
-      return next(createError(400, "There is something wrong with refresh token"));
-    }
-    const accessToken = generateAccessToken(user?._id);
-    res.status(200).json({ token: accessToken });
-  });
-});
-
 const logout = asyncHandler(async (req, res, next) => {
   const cookie = req.cookies;
-  if (!cookie?.refreshToken) return next(createError(204, "No refresh token in cookies"));
+  if (!cookie?.refreshToken) return next(createError(204, { success: false, message: "No refresh token in cookies" }));
 
   const refreshToken = cookie.refreshToken;
   const user = await User.findOne({ refreshToken });
@@ -284,7 +239,7 @@ const logout = asyncHandler(async (req, res, next) => {
     secure: true,
     sameSite: "Strict",
   });
-  res.status(200).json("Logout successful");
+  res.status(200).json({ success: true, message: "Logout successful" });
 });
 
 const changePassword = asyncHandler(async (req, res, next) => {
@@ -293,40 +248,45 @@ const changePassword = asyncHandler(async (req, res, next) => {
 
   // Validate required fields
   if (!oldPassword || !newPassword) {
-    return next(createError(400, "Mật khẩu cũ và mật khẩu mới là bắt buộc"));
+    return next(createError(400, { success: false, message: "Mật khẩu cũ và mật khẩu mới là bắt buộc" }));
   }
 
   // Find the user
   const user = await User.findById(_id);
-  if (!user) return next(createError(404, "User not found"));
+  if (!user) return next(createError(404, { success: false, message: "User not found" }));
 
   // Kiểm tra mật khẩu cũ
   const isMatch = await user.isPasswordMatched(oldPassword);
-  if (!isMatch) return next(createError(400, "Mật khẩu cũ không đúng"));
+  if (!isMatch) return next(createError(400, { success: false, message: "Mật khẩu cũ không đúng" }));
 
   user.password = newPassword;
   await user.save();
 
-  res.status(200).json("Đổi mật khẩu thành công!");
+  res.status(200).json({ success: true, message: "Đổi mật khẩu thành công!" });
 });
 
 const resetPassword = asyncHandler(async (req, res, next) => {
   const { email, newPassword } = req.body;
 
   const user = await User.findOne({ email });
-  if (!user) return next(createError(404, "User not found"));
+  if (!user) return next(createError(404, { success: false, message: "User not found" }));
 
   user.password = newPassword;
   await user.save();
 
-  res.status(200).json("Đổi mật khẩu thành công!");
+  res.status(200).json({ success: true, message: "Đổi mật khẩu thành công!" });
 });
 
 const forgotPassword = asyncHandler(async (req, res, next) => {
   const { email } = req.body;
   const user = await User.findOne({ email, isGoogleLogin: false });
   if (!user)
-    return next(createError("404", "Tài khoản không tồn tại hoặc tài khoản được đăng nhập bằng phương thức khác"));
+    return next(
+      createError("404", {
+        success: false,
+        message: "Tài khoản không tồn tại hoặc tài khoản được đăng nhập bằng phương thức khác",
+      })
+    );
 
   const otp = await user.createOtp();
   await user.save();
@@ -342,7 +302,7 @@ const forgotPassword = asyncHandler(async (req, res, next) => {
     html: resetURL,
   };
   await sendEmail(data);
-  res.status(200).json("Send email successfully");
+  res.status(200).json({ success: true, message: "Send email successfully" });
 });
 
 const checkOTP = asyncHandler(async (req, res, next) => {
@@ -355,95 +315,14 @@ const checkOTP = asyncHandler(async (req, res, next) => {
     otpExpires: { $gt: Date.now() },
   });
 
-  if (!user) return next(createError("400", "OPT đã hết hạn hoặc không đúng mã, vui lòng thử lại"));
+  if (!user)
+    return next(createError("400", { success: false, message: "OPT đã hết hạn hoặc không đúng mã, vui lòng thử lại" }));
 
   user.otp = undefined;
   user.otpExpires = undefined;
   await user.save();
 
   res.status(200).json("OTP hợp lệ");
-});
-
-const forgotPasswordShipper = asyncHandler(async (req, res, next) => {
-  const { email } = req.body;
-
-  const shipper = await Shipper.findOne({ email, isGoogleLogin: false });
-  if (!shipper) {
-    return next(createError(404, "Tài khoản không tồn tại hoặc tài khoản được đăng nhập bằng phương thức khác"));
-  }
-
-  const otp = await shipper.createOtp();
-  await shipper.save();
-
-  const resetURL = `
-    <p>Mã OTP của bạn là: ${otp}</p>
-    <p>Vui lòng nhập mã này để lấy lại mật khẩu. OTP sẽ hết hạn trong 2 phút</p>
-  `;
-  const data = {
-    to: email,
-    text: "",
-    subject: "Forgot Password OTP",
-    html: resetURL,
-  };
-
-  await sendEmail(data);
-
-  res.json({
-    code: 200,
-    status: "success",
-    message: "Gửi email thành công. Vui lòng kiểm tra hộp thư để lấy mã OTP.",
-  });
-});
-
-const checkOTPForShipper = asyncHandler(async (req, res, next) => {
-  const { email, otp } = req.body;
-  const hashedOTP = crypto.createHash("sha256").update(otp).digest("hex");
-
-  const shipper = await Shipper.findOne({
-    email,
-    otp: hashedOTP,
-    otpExpires: { $gt: Date.now() },
-  });
-
-  if (!shipper) {
-    return res.status(400).json({
-      code: 400,
-      status: "error",
-      message: "OTP đã hết hạn hoặc không đúng mã, vui lòng thử lại",
-    });
-  }
-
-  shipper.otp = undefined;
-  shipper.otpExpires = undefined;
-  await shipper.save();
-
-  return res.status(200).json({
-    code: 200,
-    status: "success",
-    message: "OTP hợp lệ",
-  });
-});
-
-const resetPasswordShipper = asyncHandler(async (req, res, next) => {
-  const { email, password } = req.body;
-
-  const shipper = await Shipper.findOne({ email });
-  if (!shipper) {
-    return res.status(404).json({
-      code: 404,
-      status: "error",
-      message: "Tài khoản không tồn tại",
-    });
-  }
-
-  shipper.password = password;
-  await shipper.save();
-
-  return res.status(200).json({
-    code: 200,
-    status: "success",
-    message: "Đổi mật khẩu thành công!",
-  });
 });
 
 module.exports = {

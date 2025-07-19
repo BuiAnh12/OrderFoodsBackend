@@ -88,7 +88,6 @@ const addFavorite = async (req, res) => {
     return res.status(201).json({
       success: true,
       message: "Favorite updated successfully",
-      favorite: favoriteRecord,
     });
   } catch (error) {
     console.log(error);
@@ -138,7 +137,6 @@ const removeFavorite = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Store removed from favorites",
-      favorite: favoriteRecord,
     });
   } catch (error) {
     console.log(error);
