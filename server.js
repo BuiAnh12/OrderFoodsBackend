@@ -11,6 +11,7 @@ const socketIo = require("socket.io");
 const morgan = require("morgan");
 
 const { setSocketIo, getUserSockets } = require("./utils/socketManager");
+const Notification = require("./models/notification.model");
 const swaggerUi = require("swagger-ui-express");
 const swaggerJsdoc = require("swagger-jsdoc");
 
@@ -31,7 +32,6 @@ const categoryRoute = require("./routes/category.routes");
 const statisticsRoute = require("./routes/statistics.routes");
 const systemCategoryRoute = require("./routes/systemCategory.routes");
 const voucherRoute = require("./routes/voucher.routes");
-
 
 const app = express();
 connectDB();
@@ -99,6 +99,60 @@ app.use(errorHandler);
 
 const server = http.createServer(app);
 const io = socketIo(server, { cors: { origin: "*" } });
+
+setSocketIo(io); // Make io accessible everywhere
+const userSockets = getUserSockets();
+
+io.on("connection", (socket) => {
+  socket.on("registerUser", async (userId) => {
+    // Nếu userId chưa có trong userSockets, tạo mảng mới
+    if (!userSockets[userId]) {
+      userSockets[userId] = [];
+    }
+
+    // Thêm socket id vào mảng của user
+    userSockets[userId].push(socket.id);
+
+    console.log(`User ${userId} connected with socket ID: ${socket.id}`);
+
+    // Khi user kết nối, lấy tất cả thông báo của họ
+    try {
+      const allNotifications = await Notification.find({ userId }).sort({ createdAt: -1 });
+      socket.emit("getAllNotifications", allNotifications); // Gửi về client
+    } catch (error) {
+      console.error("Lỗi lấy thông báo:", error);
+    }
+  });
+
+  // Gửi thông báo đến tất cả các thiết bị của một user
+  socket.on("sendNotification", async ({ userId, title, message, type }) => {
+    try {
+      const newNotification = new Notification({ userId, title, message, type });
+      await newNotification.save();
+
+      // Gửi thông báo đến tất cả các socket ids của userId
+      if (userSockets[userId]) {
+        userSockets[userId].forEach((socketId) => {
+          io.to(socketId).emit("newNotification", newNotification);
+        });
+      }
+    } catch (error) {
+      console.error("Lỗi gửi thông báo:", error);
+    }
+  });
+
+  socket.on("disconnect", () => {
+    console.log("User disconnected:", socket.id);
+    for (let userId in userSockets) {
+      const socketIndex = userSockets[userId].indexOf(socket.id);
+      if (socketIndex !== -1) {
+        userSockets[userId].splice(socketIndex, 1);
+        console.log(`User ${userId} disconnected, removed socket ID: ${socket.id}`);
+        break;
+      }
+    }
+  });
+});
 
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on http://localhost:${PORT}`);
