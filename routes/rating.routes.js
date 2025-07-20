@@ -14,7 +14,7 @@ const router = express.Router();
 router.get("/:storeId", validateMongoDbId("storeId"), getAllStoreRating);
 router.get("/detail/:ratingId", validateMongoDbId("ratingId"), getDetailRating);
 
-router.post("/add-rating", authMiddleware, validateMongoDbId("storeId"), addStoreRating);
+router.post("/add-rating", authMiddleware, addStoreRating);
 
 router.put("/edit-rating/:ratingId", authMiddleware, validateMongoDbId("ratingId"), editStoreRating);
 
