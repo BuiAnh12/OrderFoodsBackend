@@ -12,6 +12,9 @@ const Order = require("../models/order.model");
 const OrderItem = require("../models/orderItem.model");
 const OrderItemTopping = require("../models/orderItemTopping.model");
 const OrderShipInfo = require("../models/orderShipInfo.model");
+const OrderVoucher = require("../models/orderVoucher.model");
+const Voucher = require("../models/voucher.model");
+const UserVoucherUsage = require("../models/userVoucherUsage.model");
 
 const getUserCart = async (req, res) => {
   try {
@@ -328,82 +331,78 @@ const completeCart = async (req, res) => {
       note,
       location = [],
       shippingFee = 0,
-      totalDiscount = 0,
+      vouchers = [], // danh sách voucherId
     } = req.body;
 
-    if (!userId) {
-      return res.status(401).json({ success: false, message: "User not found" });
-    }
+    if (!userId) return res.status(401).json({ success: false, message: "User not found" });
 
     if (!storeId || !paymentMethod || !deliveryAddress || !Array.isArray(location) || location.length !== 2) {
       return res.status(400).json({ success: false, message: "Invalid request body" });
     }
 
     const cart = await Cart.findOne({ userId, storeId });
-    if (!cart) {
-      return res.status(400).json({ success: false, message: "Cart not found" });
+    if (!cart) return res.status(400).json({ success: false, message: "Cart not found" });
+
+    // Lấy cart items và populate dish, toppings
+    const cartItems = await CartItem.find({ cartId: cart._id }).populate("dish").populate("toppings");
+    if (!cartItems.length) return res.status(400).json({ success: false, message: "Cart is empty" });
+
+    // --- Tính subtotalPrice từ cartItems ---
+    let subtotalPrice = 0;
+    for (const item of cartItems) {
+      const dishPrice = (item.dish?.price || 0) * item.quantity;
+      const toppingsPrice =
+        (Array.isArray(item.toppings) ? item.toppings.reduce((sum, topping) => sum + (topping.price || 0), 0) : 0) *
+        item.quantity;
+      subtotalPrice += dishPrice + toppingsPrice;
     }
 
-    const cartItems = await CartItem.find({ cartId: cart._id });
-    if (!cartItems.length) {
-      return res.status(400).json({ success: false, message: "Cart is empty" });
+    // --- Tính totalDiscount từ vouchers ---
+    let totalDiscount = 0;
+    const validVouchers = [];
+    const now = new Date();
+
+    for (const voucherId of vouchers) {
+      const voucher = await Voucher.findById(voucherId);
+      if (!voucher || !voucher.isActive) continue;
+
+      // Check ngày hiệu lực
+      if (voucher.startDate > now || voucher.endDate < now) continue;
+
+      // Check minOrderAmount
+      if (voucher.minOrderAmount && subtotalPrice < voucher.minOrderAmount) continue;
+
+      // Tính discount
+      let discount = 0;
+      if (voucher.discountType === "PERCENTAGE") {
+        discount = (subtotalPrice * voucher.discountValue) / 100;
+        if (voucher.maxDiscount) discount = Math.min(discount, voucher.maxDiscount);
+      } else if (voucher.discountType === "FIXED") {
+        discount = voucher.discountValue;
+      }
+
+      totalDiscount += discount;
+      validVouchers.push({ voucher, discount });
     }
 
-    let subtotal = 0;
+    const finalTotal = Math.max(0, subtotalPrice - totalDiscount + shippingFee);
 
+    // --- Tạo order ---
     const newOrder = await Order.create({
       userId,
       storeId,
       paymentMethod,
       status: "pending",
-      subtotalPrice: 0, // Tạm thời 0, lát cập nhật lại
-      totalDiscount: 0,
-      shippingFee: 0,
-      finalTotal: 0,
+      subtotalPrice,
+      totalDiscount,
+      shippingFee,
+      finalTotal,
     });
 
-    for (const item of cartItems) {
-      const orderItem = await OrderItem.create({
-        orderId: newOrder._id,
-        dishId: item.dishId,
-        dishName: item.dishName,
-        quantity: item.quantity,
-        price: item.price,
-        note: item.note,
-      });
-
-      const toppings = await CartItemTopping.find({ cartItemId: item._id });
-
-      let toppingTotal = 0;
-      for (const topping of toppings) {
-        toppingTotal += topping.price;
-        await OrderItemTopping.create({
-          orderItemId: orderItem._id,
-          toppingId: topping.toppingId,
-          toppingName: topping.toppingName,
-          price: topping.price,
-        });
-      }
-
-      // Tính tổng cho từng món (cả topping)
-      subtotal += (item.price + toppingTotal) * item.quantity;
-    }
-
-    // Cập nhật lại order với tổng tiền
-    const finalTotal = subtotal - totalDiscount + shippingFee;
-
-    newOrder.subtotalPrice = subtotal;
-    newOrder.totalDiscount = totalDiscount;
-    newOrder.shippingFee = shippingFee;
-    newOrder.finalTotal = finalTotal;
-    await newOrder.save();
-
+    // --- Lưu thông tin giao hàng ---
     await OrderShipInfo.create({
       orderId: newOrder._id,
-      shipLocation: {
-        type: "Point",
-        coordinates: location,
-      },
+      shipLocation: { type: "Point", coordinates: location },
       address: deliveryAddress,
       detailAddress,
       contactName: customerName,
@@ -411,10 +410,32 @@ const completeCart = async (req, res) => {
       note,
     });
 
+    // --- Lưu voucher đã dùng ---
+    for (const { voucher, discount } of validVouchers) {
+      await OrderVoucher.create({
+        orderId: newOrder._id,
+        voucherId: voucher._id,
+        discountAmount: discount,
+      });
+
+      // Update Voucher usage
+      voucher.usedCount = (voucher.usedCount || 0) + 1;
+      await voucher.save();
+
+      // Update UserVoucherUsage
+      await UserVoucherUsage.findOneAndUpdate(
+        { userId, voucherId: voucher._id },
+        { $inc: { usedCount: 1 }, startDate: voucher.startDate },
+        { upsert: true, new: true }
+      );
+    }
+
+    // --- Clear cart ---
     await CartItemTopping.deleteMany({ cartItemId: { $in: cartItems.map((i) => i._id) } });
     await CartItem.deleteMany({ cartId: cart._id });
     await Cart.findByIdAndDelete(cart._id);
 
+    // --- Thông báo cho store ---
     const store = await Store.findById(storeId);
     await Notification.create({
       userId: store.owner,
@@ -428,6 +449,7 @@ const completeCart = async (req, res) => {
     return res.status(201).json({
       success: true,
       message: "Order placed successfully",
+      order: newOrder,
     });
   } catch (error) {
     console.error(error);

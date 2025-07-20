@@ -5,6 +5,7 @@ const Order = require("../models/order.model");
 const OrderItem = require("../models/orderItem.model");
 const OrderItemTopping = require("../models/orderItemTopping.model");
 const OrderShipInfo = require("../models/orderShipInfo.model");
+const OrderVoucher = require("../models/orderVoucher.model");
 const SystemCategory = require("../models/systemCategory.model");
 const Cart = require("../models/cart.model");
 const CartItem = require("../models/cartItem.model");
@@ -78,6 +79,7 @@ const getOrderDetail = asyncHandler(async (req, res, next) => {
     return next(createError(400, "orderId not found"));
   }
 
+  // Lấy Order + Store + Items + Dish + Toppings
   const order = await Order.findById(orderId)
     .populate({
       path: "store",
@@ -92,10 +94,11 @@ const getOrderDetail = asyncHandler(async (req, res, next) => {
         },
         {
           path: "toppings",
+          select: "name price",
         },
       ],
     })
-    .lean(); // optional: convert to plain object
+    .lean();
 
   if (!order) {
     return next(createError(404, "Order not found"));
@@ -104,11 +107,20 @@ const getOrderDetail = asyncHandler(async (req, res, next) => {
   // Lấy thông tin giao hàng
   const shipInfo = await OrderShipInfo.findOne({ orderId }).lean();
 
+  // Lấy danh sách voucher đã áp dụng
+  const orderVouchers = await OrderVoucher.find({ orderId })
+    .populate({
+      path: "voucherId",
+      select: "code description discountType discountValue maxDiscount",
+    })
+    .lean();
+
   return res.status(200).json({
     success: true,
     data: {
       ...order,
       shipInfo: shipInfo || null,
+      vouchers: orderVouchers || [],
     },
   });
 });
@@ -277,7 +289,7 @@ const cancelOrder = asyncHandler(async (req, res, next) => {
     return next(createError(404, "Order not found"));
   }
 
-  if (order.user.toString() !== userId.toString()) {
+  if (order.userId.toString() !== userId.toString()) {
     return next(createError(403, "You are not authorized to cancel this order"));
   }
 
@@ -525,7 +537,6 @@ const reOrder = async (req, res) => {
     return res.status(201).json({
       success: true,
       message: "Reorder successful",
-      cartId: newCart._id,
     });
   } catch (error) {
     console.error(error);
