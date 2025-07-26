@@ -7,6 +7,7 @@ const {
   updateVoucher,
   getVoucherById,
   deleteVoucher,
+  toggleVoucherActiveStatus,
 } = require("../controllers/voucher.controller");
 
 const router = express.Router();
@@ -14,6 +15,10 @@ const router = express.Router();
 router.get("/stores/:storeId/vouchers", getVouchersByStore);
 
 router.post("/stores/:storeId/vouchers", createVoucher);
+router.patch(
+  "/stores/:storeId/vouchers/:id/toggle-active",
+  toggleVoucherActiveStatus
+);
 
 router.put("/stores/:storeId/vouchers/:id", updateVoucher);
 router.get("/stores/:storeId/vouchers/:id", getVoucherById);
