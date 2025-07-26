@@ -27,13 +27,11 @@ router.get("/revenue/by-day", authMiddleware, revenueByDay);
 router.get("/revenue/reve", authMiddleware, getRevenueSummary);
 router.get("/revenue/by-item", authMiddleware, revenueByItem);
 router.get("/revenue/by-category", authMiddleware, revenueByCategory);
-router.get("/revenue/status-rate", authMiddleware, orderStatusRate);
 
-
+router.get("/order/status-rate", authMiddleware, orderStatusRate);
 router.get("/order/summary", authMiddleware, orderSummaryStats);
 router.get("/order/over-time", authMiddleware, ordersOverTime);
 router.get("/order/status-distribution", authMiddleware, orderStatusDistribution);
-
 router.get("/orders/by-time-slot", authMiddleware, ordersByTimeSlot);
 
 router.get("/top-selling-items", authMiddleware, topSellingItems);

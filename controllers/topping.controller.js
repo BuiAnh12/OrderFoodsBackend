@@ -26,7 +26,7 @@ const getStoreToppings = asyncHandler(async (req, res, next) => {
         page
     );
     res.status(200).json(
-        successResponse(response, "Toppings retrieved successfully")
+        response
     );
 });
 
