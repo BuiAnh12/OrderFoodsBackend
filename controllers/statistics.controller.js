@@ -705,7 +705,6 @@ const ordersByTimeSlot = asyncHandler(async (req, res) => {
         { label: "18:00-22:00", start: 18, end: 22 },
     ];
 
-    // Use aggregation to project hour from createdAt
     const results = await Order.aggregate([
         {
             $match: {
@@ -727,23 +726,24 @@ const ordersByTimeSlot = asyncHandler(async (req, res) => {
         },
     ]);
 
-    // Initialize output
-    const timeSlotStats = {};
-    timeSlots.forEach((slot) => {
-        timeSlotStats[slot.label] = 0;
-    });
+    // Create time slot summary in array format
+    const slotCounts = timeSlots.map((slot) => ({
+        timeSlot: slot.label,
+        orders: 0,
+    }));
 
     results.forEach((item) => {
         const hour = item._id;
-        for (const slot of timeSlots) {
+        for (let i = 0; i < timeSlots.length; i++) {
+            const slot = timeSlots[i];
             if (hour >= slot.start && hour < slot.end) {
-                timeSlotStats[slot.label] += item.orders;
+                slotCounts[i].orders += item.orders;
                 break;
             }
         }
     });
 
-    return res.status(200).json(successResponse(timeSlotStats));
+    return res.status(200).json(successResponse(slotCounts));
 });
 
 const newCustomers = asyncHandler(async (req, res) => {
@@ -1161,7 +1161,10 @@ const voucherRevenueImpact = asyncHandler(async (req, res, next) => {
                 totalDiscountAmount: 1,
                 revenueBeforeDiscount: 1,
                 revenueAfterDiscount: {
-                    $subtract: ["$revenueBeforeDiscount", "$totalDiscountAmount"],
+                    $subtract: [
+                        "$revenueBeforeDiscount",
+                        "$totalDiscountAmount",
+                    ],
                 },
                 discountRatio: {
                     $cond: {
