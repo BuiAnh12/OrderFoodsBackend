@@ -10,32 +10,52 @@ const { getPaginatedData } = require("../utils/paging");
 
 const getAllStore = async (req, res) => {
   try {
-    // Nhận các tham số truy vấn từ URL
-    const { name, category, sort, limit, page, lat, lon } = req.query;
+    const { keyword, category, sort, limit, page, lat, lon } = req.query;
 
     let filterOptions = {};
 
-    // Lọc theo danh mục (nếu có)
+    // Lọc theo danh mục
     if (category) {
       const categories = Array.isArray(category) ? category : category.split(",");
       filterOptions.storeCategory = { $in: categories };
     }
 
-    // Truy vấn ban đầu từ MongoDB (chỉ lọc theo danh mục & status)
-    let stores = await Store.find(filterOptions)
-      .populate("storeCategory") // Populate danh mục cửa hàng
-      .lean();
+    // Tìm kiếm theo keyword
+    if (keyword && keyword.trim()) {
+      const kw = keyword.trim();
 
-    // Lọc thêm theo tên sau khi lấy về, dùng tìm kiếm không dấu
-    if (name && name.trim()) {
-      const keyword = name.trim().toLowerCase();
-      stores = stores.filter((store) => {
-        const storeName = store.name.toLowerCase();
-        return storeName.includes(keyword);
-      });
+      // 1. Lấy danh sách systemCategoryId có tên khớp keyword
+      const matchedSystemCategories = await SystemCategory.find({
+        name: { $regex: kw, $options: "i" },
+      }).select("_id");
+      const systemCategoryIds = matchedSystemCategories.map((c) => c._id);
+
+      // 2. Lấy danh sách storeId từ Category (nếu category name khớp keyword)
+      const matchedCategories = await Category.find({
+        name: { $regex: kw, $options: "i" },
+      }).select("store");
+      const storeIdsFromCategory = matchedCategories.map((c) => c.store);
+
+      // 3. Lấy danh sách storeId từ Dish (nếu dish name khớp keyword)
+      const matchedDishes = await Dish.find({
+        name: { $regex: kw, $options: "i" },
+      }).select("storeId");
+      const storeIdsFromDishes = matchedDishes.map((d) => d.storeId);
+
+      // 4. Gộp điều kiện vào filterOptions
+      filterOptions.$or = [
+        { name: { $regex: kw, $options: "i" } }, // tên store
+        { description: { $regex: kw, $options: "i" } }, // mô tả store
+        { storeCategory: { $in: systemCategoryIds } }, // danh mục hệ thống
+        { _id: { $in: storeIdsFromCategory } }, // từ category name
+        { _id: { $in: storeIdsFromDishes } }, // từ dish name
+      ];
     }
 
-    // Tính điểm đánh giá trung bình và số lượng đánh giá
+    // Lấy danh sách store
+    let stores = await Store.find(filterOptions).populate("storeCategory").lean();
+
+    // Ghép rating
     const storeRatings = await Rating.aggregate([
       {
         $group: {
@@ -46,7 +66,6 @@ const getAllStore = async (req, res) => {
       },
     ]);
 
-    // Ghép thông tin rating vào mỗi store
     stores = stores.map((store) => {
       const rating = storeRatings.find((r) => r._id.toString() === store._id.toString());
       return {
