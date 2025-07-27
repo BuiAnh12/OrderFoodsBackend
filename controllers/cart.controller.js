@@ -399,6 +399,30 @@ const completeCart = async (req, res) => {
       finalTotal,
     });
 
+    // --- Lưu các OrderItem từ CartItem ---
+    for (const item of cartItems) {
+      const orderItem = await OrderItem.create({
+        orderId: newOrder._id,
+        dishId: item.dish?._id,
+        dishName: item.dishName,
+        price: item.price,
+        quantity: item.quantity,
+        note: item.note || "",
+      });
+
+      // Nếu có topping, lưu vào OrderItemTopping
+      if (Array.isArray(item.toppings) && item.toppings.length) {
+        for (const topping of item.toppings) {
+          await OrderItemTopping.create({
+            orderItemId: orderItem._id,
+            toppingId: topping._id,
+            toppingName: topping.toppingName,
+            price: topping.price,
+          });
+        }
+      }
+    }
+
     // --- Lưu thông tin giao hàng ---
     await OrderShipInfo.create({
       orderId: newOrder._id,
@@ -449,7 +473,7 @@ const completeCart = async (req, res) => {
     return res.status(201).json({
       success: true,
       message: "Order placed successfully",
-      order: newOrder,
+      orderId: newOrder._id,
     });
   } catch (error) {
     console.error(error);

@@ -236,7 +236,7 @@ const updateOrderStatus = asyncHandler(async (req, res, next) => {
   const validTransitions = {
     taken: ["delivering", "finished"],
     delivering: ["delivered"],
-    delivered: ["done"],
+    taken: ["done"],
   };
 
   if (status === currentStatus) {
