@@ -5,7 +5,7 @@ var orderItemToppingSchema = new mongoose.Schema(
     orderItemId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "OrderItem",
-      require: true,
+      required: true,
     },
     toppingId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -21,7 +21,11 @@ var orderItemToppingSchema = new mongoose.Schema(
       required: true,
     },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    toObject: { virtuals: true },
+    toJSON: { virtuals: true },
+  }
 );
 
 orderItemToppingSchema.virtual("topping", {

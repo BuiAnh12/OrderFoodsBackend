@@ -196,14 +196,14 @@ const getAllDishInStore = async (req, res) => {
   try {
     const { storeId } = req.params;
 
-    const response = await Dish.find({ storeId });
+    const dishes = await Dish.find({ storeId }).populate("category", "name");
 
     res.status(200).json({
-      success: true,
-      data: response,
+      status: true,
+      data: dishes,
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: "Lỗi khi lấy danh sách món ăn" });
   }
 };
 
