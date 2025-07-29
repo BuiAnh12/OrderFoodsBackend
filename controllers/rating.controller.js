@@ -4,7 +4,7 @@ const Rating = require("../models/rating.model");
 const asyncHandler = require("express-async-handler");
 const createError = require("../utils/createError");
 const { getPaginatedData } = require("../utils/paging");
-``;
+const {getStoreIdFromUser} = require("../utils/getStoreIdFromUser")
 
 const getAllStoreRating = asyncHandler(async (req, res, next) => {
   try {
@@ -172,10 +172,83 @@ const deleteStoreRating = asyncHandler(async (req, res, next) => {
   }
 });
 
+
+const getRatingsByStore = asyncHandler(async (req, res, next) => {
+  try {
+    const userId = req?.user?._id;
+    const storeId = await getStoreIdFromUser(userId);
+    const { page, limit, replied, sort = "-createdAt" } = req.query;
+
+    const filterOptions = { storeId };
+
+    // Replied filter logic
+    if (replied === "true") {
+      filterOptions.storeReply = { $ne: "" };
+    } else if (replied === "false") {
+      filterOptions.storeReply = "";
+    }
+
+    // Use your pagination helper
+    const result = await getPaginatedData(
+      Rating,
+      filterOptions,
+      "user order", // populate both
+      limit,
+      page,
+      sort
+    );
+
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("Error in getRatingsByStore:", error.message);
+    next(createError(500, error.message));
+  }
+});
+
+const replyToRating = asyncHandler(async (req, res, next) => {
+  try {
+    const ratingId = req.params.id;
+    const userId = req?.user?._id;
+    const storeId = await getStoreIdFromUser(userId);
+    const { storeReply } = req.body;
+
+    if (typeof storeReply !== "string") {
+      return next(createError(400,"Reply must be a string"))
+    }
+
+    const rating = await Rating.findById(ratingId);
+
+    if (!rating) {
+      return next(createError(404,"Rating not found"))
+    }
+
+    if (rating.storeId.toString() !== storeId.toString()) {
+      return next(createError(403,"You are not authorized to reply to this rating"))
+    }
+
+    rating.storeReply = storeReply;
+    await rating.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Reply saved successfully",
+      data: rating,
+    });
+  } catch (error) {
+    console.error("Error in replyToRating:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+});
+
 module.exports = {
   getAllStoreRating,
   getDetailRating,
   addStoreRating,
   editStoreRating,
   deleteStoreRating,
+  getRatingsByStore,
+  replyToRating
 };

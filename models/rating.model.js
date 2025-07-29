@@ -33,6 +33,10 @@ const ratingSchema = new mongoose.Schema(
         url: String,
       },
     ],
+    storeReply: {
+      type: String,
+      default: "",
+    },
   },
   {
     timestamps: true,
