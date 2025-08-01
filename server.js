@@ -33,6 +33,8 @@ const statisticsRoute = require("./routes/statistics.routes");
 const systemCategoryRoute = require("./routes/systemCategory.routes");
 const voucherRoute = require("./routes/voucher.routes");
 const paymentRoute = require("./routes/payment.route");
+const staffRoute = require("./routes/staff.routes");
+
 
 const app = express();
 connectDB();
@@ -40,7 +42,11 @@ connectDB();
 app.use(morgan("dev"));
 app.use(
   cors({
-    origin: ["http://localhost:3000", "http://localhost:3001"],
+    origin: [
+      "http://localhost:3000",
+      "http://localhost:3001",
+      "http://192.168.1.10:3000",
+    ],
     credentials: true,
   })
 );
@@ -96,6 +102,8 @@ app.use("/api/v1/statistics", statisticsRoute);
 app.use("/api/v1/system-category", systemCategoryRoute);
 app.use("/api/v1/voucher", voucherRoute);
 app.use("/api/v1/payment", paymentRoute);
+app.use("/api/v1/staff", staffRoute);
+
 
 app.use(errorHandler);
 
@@ -119,7 +127,9 @@ io.on("connection", (socket) => {
 
     // Khi user kết nối, lấy tất cả thông báo của họ
     try {
-      const allNotifications = await Notification.find({ userId }).sort({ createdAt: -1 });
+      const allNotifications = await Notification.find({ userId }).sort({
+        createdAt: -1,
+      });
       socket.emit("getAllNotifications", allNotifications); // Gửi về client
     } catch (error) {
       console.error("Lỗi lấy thông báo:", error);
@@ -129,7 +139,12 @@ io.on("connection", (socket) => {
   // Gửi thông báo đến tất cả các thiết bị của một user
   socket.on("sendNotification", async ({ userId, title, message, type }) => {
     try {
-      const newNotification = new Notification({ userId, title, message, type });
+      const newNotification = new Notification({
+        userId,
+        title,
+        message,
+        type,
+      });
       await newNotification.save();
 
       // Gửi thông báo đến tất cả các socket ids của userId
@@ -149,7 +164,9 @@ io.on("connection", (socket) => {
       const socketIndex = userSockets[userId].indexOf(socket.id);
       if (socketIndex !== -1) {
         userSockets[userId].splice(socketIndex, 1);
-        console.log(`User ${userId} disconnected, removed socket ID: ${socket.id}`);
+        console.log(
+          `User ${userId} disconnected, removed socket ID: ${socket.id}`
+        );
         break;
       }
     }
