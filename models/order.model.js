@@ -20,7 +20,11 @@ const orderSchema = new mongoose.Schema(
     },
     paymentMethod: {
       type: String,
-      enum: ["cash", "credit_card"],
+      enum: ["cash", "vnpay"],
+    },
+    paymentSatus: {
+      type: String,
+      enum: ["pending", "paid"]
     },
     subtotalPrice: {
       type: Number,

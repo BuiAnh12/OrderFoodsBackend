@@ -426,7 +426,7 @@ const getAllOrder = async (req, res) => {
           order.user?.name?.match(regex) || order.customerName?.match(regex) || order.customerPhonenumber?.match(regex)
       );
     }
-
+    res.setHeader("Cache-Control", "no-store");
     res.status(200).json(response);
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

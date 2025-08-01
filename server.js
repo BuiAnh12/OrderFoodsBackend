@@ -32,7 +32,9 @@ const categoryRoute = require("./routes/category.routes");
 const statisticsRoute = require("./routes/statistics.routes");
 const systemCategoryRoute = require("./routes/systemCategory.routes");
 const voucherRoute = require("./routes/voucher.routes");
+const paymentRoute = require("./routes/payment.route");
 const staffRoute = require("./routes/staff.routes");
+
 
 const app = express();
 connectDB();
@@ -99,7 +101,9 @@ app.use("/api/v1/category", categoryRoute);
 app.use("/api/v1/statistics", statisticsRoute);
 app.use("/api/v1/system-category", systemCategoryRoute);
 app.use("/api/v1/voucher", voucherRoute);
+app.use("/api/v1/payment", paymentRoute);
 app.use("/api/v1/staff", staffRoute);
+
 
 app.use(errorHandler);
 
