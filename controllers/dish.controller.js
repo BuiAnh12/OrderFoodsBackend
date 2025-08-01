@@ -4,6 +4,7 @@ const createError = require("../utils/createError");
 const successResponse = require("../utils/successResponse");
 const { getPaginatedData } = require("../utils/paging");
 const mongoose = require("mongoose");
+const redisCache = require("../utils/redisCaches");
 
 const getDishById = asyncHandler(async (req, res) => {
     const { dish_id } = req.params;
@@ -29,6 +30,13 @@ const getDishById = asyncHandler(async (req, res) => {
 const getDishesByStoreId = asyncHandler(async (req, res, next) => {
     const { store_id } = req.params;
     const { name , limit , page  } = req.query;
+    const cacheKey = `dishes:store:${store_id}`
+    const cached = await redisCache.get(cacheKey);
+    if (cached) {
+        res.status(200).json(
+            successResponse(cached, "Dishes retrieved successfully")
+        );
+      }
     if (!store_id) {
         return next(createError(400, "store ID is required"));
     }
@@ -48,6 +56,7 @@ const getDishesByStoreId = asyncHandler(async (req, res, next) => {
         limit,
         page
     );
+    const cacheRes = await redisCache.set(cacheKey, result);
     res.status(200).json(
         successResponse(result, "Dishes retrieved successfully")
     );
@@ -73,6 +82,7 @@ const createDish = asyncHandler(async (req, res, next) => {
         storeId: new mongoose.Types.ObjectId(store_id)
     });
     await dish.save();
+    await redisCache.delByPattern(`dishes:store:${store_id}`);
     res.status(201).json(successResponse(dish, "Dish created successfully"));
 });
 
@@ -88,6 +98,7 @@ const changeStatus = asyncHandler(async (req, res, next) => {
       }
     }
     await dish.save();
+    await redisCache.delByPattern(`dishes:store:${store_id}`);
     res.status(200).json(successResponse(null, "Dish on/off stock status change successfully"));
 });
 
@@ -112,6 +123,7 @@ const updateDish = asyncHandler(async (req, res, next) => {
     dish.toppingGroups = toppingGroups || dish.toppingGroups;
 
     await dish.save();
+    await redisCache.delByPattern(`dishes:store:${store_id}`);
     res.status(200).json(successResponse(null, "Dish updated successfully"));
 });
 
@@ -124,6 +136,7 @@ const deleteDish = asyncHandler(async (req, res, next) => {
     if (!dish) {
         return next(createError(404, "Dish not found"));
     }
+    await redisCache.delByPattern(`dishes:store:${store_id}`);
     res.status(200).json(successResponse(null, "Dish deleted successfully"));
 
 });
