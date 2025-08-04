@@ -13,13 +13,18 @@ const {
   storeOwnByUser,
   registerStoreOwner,
   checkRegisterStoreOwner,
+  registerStore,
+  deleteStoreOwnerById,
 } = require("../controllers/auth.controller");
 
 const router = express.Router();
 
 router.post("/register", register);
+router.post("/register/store", registerStore);
 router.post("/register/store-owner", registerStoreOwner);
-router.get("/check-register-store-owner/:email", checkRegisterStoreOwner);
+router.delete("/store-owner/:id", deleteStoreOwnerById);
+
+router.post("/check-register-store-owner", checkRegisterStoreOwner);
 router.post("/login", login);
 router.post("/store", authMiddleware, storeOwnByUser);
 router.post("/login/google", googleLoginWithToken);
