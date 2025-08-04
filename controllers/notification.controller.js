@@ -4,6 +4,11 @@ const createError = require("../utils/createError");
 const asyncHandler = require("express-async-handler");
 const getPaginatedData = require("../utils/paging").getPaginatedData;
 const cron = require("node-cron");
+const { getUserSockets } = require("../utils/socketManager");
+
+
+const userSockets = getUserSockets();
+
 
 const getNotifications = asyncHandler(async (req, res, next) => {
   try {
@@ -60,9 +65,17 @@ const getStoreNotifications = asyncHandler(async (req, res, next) => {
   }
 });
 
+const createNotification = asyncHandler(async (req, res, next) => {
+    const {userId, title, message, type, orderId} = req.body
+    io.on("connection", (socket) => {
+      socket.on("sendNotification")
+    });
+    
+});
+
 cron.schedule("0 0 0 * * *", async () => {
   const thirtyDayAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   await Notification.deleteMany({ status: "read", createdAt: { $lt: thirtyDayAgo } });
 });
 
-module.exports = { getNotifications, updateNotification, getStoreNotifications };
+module.exports = { getNotifications, updateNotification, getStoreNotifications, createNotification };

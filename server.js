@@ -137,20 +137,18 @@ io.on("connection", (socket) => {
   });
 
   // Gửi thông báo đến tất cả các thiết bị của một user
-  socket.on("sendNotification", async ({ userId, title, message, type }) => {
+  socket.on("sendNotification", async ({ userId, title, message, type, orderId }) => {
     try {
-      const newNotification = new Notification({
-        userId,
-        title,
-        message,
-        type,
-      });
+      console.log(`[NOTIFICATION] Sending notification to user ${userId}: ${title}`);
+      console.log('[NOTIFICATION]' , { userId, title, message, type, orderId })
+      const newNotification = new Notification({ userId, title, message, type, orderId });
       await newNotification.save();
 
       // Gửi thông báo đến tất cả các socket ids của userId
       if (userSockets[userId]) {
         userSockets[userId].forEach((socketId) => {
           io.to(socketId).emit("newNotification", newNotification);
+          console.log(`[NOTIFICATION] Notification sent to socket ID: ${socketId}`);
         });
       }
     } catch (error) {
