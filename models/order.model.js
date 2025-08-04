@@ -22,9 +22,9 @@ const orderSchema = new mongoose.Schema(
       type: String,
       enum: ["cash", "vnpay"],
     },
-    paymentSatus: {
+    paymentStatus: {
       type: String,
-      enum: ["pending", "paid"]
+      enum: ["pending", "paid", "refunded", "failed", "cancelled"],
     },
     subtotalPrice: {
       type: Number,
@@ -38,6 +38,10 @@ const orderSchema = new mongoose.Schema(
     finalTotal: {
       type: Number,
       required: true,
+    },
+    deleted: {
+      type: Boolean,
+      default: false,
     },
   },
   {
@@ -66,5 +70,27 @@ orderSchema.virtual("store", {
   foreignField: "_id",
   justOne: true,
 });
+
+
+function softDeletePlugin(schema, options) {
+  const notDeletedCondition = { deleted: false };
+
+  schema.pre(/^find/, function (next) {
+    if (!this.getFilter().hasOwnProperty("deleted")) {
+      this.where(notDeletedCondition);
+    }
+    next();
+  });
+
+  schema.methods.softDelete = function () {
+    this.deleted = true;
+    return this.save();
+  };
+
+  schema.statics.softDeleteById = function (id) {
+    return this.findByIdAndUpdate(id, { deleted: true });
+  };
+}
+orderSchema.plugin(softDeletePlugin);
 
 module.exports = mongoose.model("Order", orderSchema);
