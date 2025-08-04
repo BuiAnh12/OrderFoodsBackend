@@ -54,7 +54,13 @@ var voucherSchema = new mongoose.Schema(
     },
     isStackable: {
       type: Boolean,
+      default: false,
     },
+    type: {
+      type: String,
+      enum: ["FOOD", "DELIVERY"],
+      default: "FOOD",
+    }
   },
   { timestamps: true }
 );

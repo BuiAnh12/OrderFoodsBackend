@@ -99,7 +99,6 @@ const checkRegisterStoreOwner = asyncHandler(async (req, res, next) => {
 const login = asyncHandler(async (req, res, next) => {
   const { email, password } = req.body;
   const { getRole, getStore } = req.query; // Get query params for role and store info
-
   if (!email || !password) {
     next(createError(400, { success: false, message: "Vui lòng điền đầy đủ thông tin" }));
   }
