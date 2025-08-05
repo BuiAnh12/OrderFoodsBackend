@@ -1,11 +1,13 @@
 const User = require("../models/user.model");
 const Store = require("../models/store.model");
+const ShippingFee = require("../models/shippingFee.model");
 const jwt = require("jsonwebtoken");
 const createError = require("../utils/createError");
 const crypto = require("crypto");
 const asyncHandler = require("express-async-handler");
 const { OAuth2Client } = require("google-auth-library");
 const sendEmail = require("../utils/sendEmail");
+const mongoose = require("mongoose");
 
 const hashPassword = (password, salt) => {
   return crypto.pbkdf2Sync(password, salt, 1000, 64, "sha512").toString("hex");
@@ -195,57 +197,95 @@ const login = asyncHandler(async (req, res, next) => {
 });
 
 const registerStore = asyncHandler(async (req, res) => {
-  const {
-    ownerId,
-    name,
-    description,
-    storeCategory,
-    avatar,
-    cover,
-    address, // { full_address, lat, lon }
-    paperWork, // { IC_front, IC_back, businessLicense, storePicture: [] }
-  } = req.body;
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
-  // 1. Kiểm tra user
-  const user = await User.findById(ownerId);
-  if (!user) {
-    return res.status(404).json({ message: "Chủ cửa hàng không tồn tại" });
+  try {
+    const {
+      ownerId,
+      name,
+      description,
+      storeCategory,
+      avatar,
+      cover,
+      address, // { full_address, lat, lon }
+      paperWork, // { IC_front, IC_back, businessLicense, storePicture: [] }
+    } = req.body;
+
+    // 1. Kiểm tra user tồn tại
+    const user = await User.findById(ownerId).session(session);
+    if (!user) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ message: "Chủ cửa hàng không tồn tại" });
+    }
+
+    // 2. Kiểm tra user đã có store chưa
+    const existedStore = await Store.findOne({ owner: ownerId }).session(
+      session
+    );
+    if (existedStore) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ message: "Người dùng đã có cửa hàng" });
+    }
+
+    // 3. Tạo store mới
+    const newStore = await Store.create(
+      [
+        {
+          name,
+          owner: ownerId,
+          description,
+          storeCategory,
+          avatar,
+          cover,
+          address: {
+            full_address: address.full_address,
+            location: {
+              type: "Point",
+              coordinates: [address.lon, address.lat],
+            },
+          },
+          paperWork: {
+            IC_front: paperWork.IC_front,
+            IC_back: paperWork.IC_back,
+            businessLicense: paperWork.businessLicense,
+            storePicture: paperWork.storePicture,
+          },
+        },
+      ],
+      { session }
+    );
+
+    // 4. Tạo phí vận chuyển mặc định
+    await ShippingFee.create(
+      [
+        {
+          store: newStore[0]._id,
+          fromDistance: 0,
+          feePerKm: 2000,
+        },
+      ],
+      { session }
+    );
+
+    // 5. Commit transaction
+    await session.commitTransaction();
+    session.endSession();
+
+    res.status(201).json({
+      status: true,
+      message: "Tạo cửa hàng thành công",
+      store: newStore[0],
+    });
+  } catch (error) {
+    // Rollback nếu lỗi
+    await session.abortTransaction();
+    session.endSession();
+    console.error("❌ Error in registerStore:", error);
+    res.status(500).json({ message: "Đã có lỗi xảy ra khi tạo cửa hàng" });
   }
-
-  // 2. Kiểm tra đã có store chưa
-  const existedStore = await Store.findOne({ owner: ownerId });
-  if (existedStore) {
-    return res.status(400).json({ message: "Người dùng đã có cửa hàng" });
-  }
-
-  // 3. Tạo store mới
-  const newStore = await Store.create({
-    name,
-    owner: ownerId,
-    description,
-    storeCategory,
-    avatar,
-    cover,
-    address: {
-      full_address: address.full_address,
-      location: {
-        type: "Point",
-        coordinates: [address.lon, address.lat],
-      },
-    },
-    paperWork: {
-      IC_front: paperWork.IC_front,
-      IC_back: paperWork.IC_back,
-      businessLicense: paperWork.businessLicense,
-      storePicture: paperWork.storePicture, // array
-    },
-  });
-
-  res.status(201).json({
-    status: true,
-    message: "Tạo cửa hàng thành công",
-    store: newStore,
-  });
 });
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);

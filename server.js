@@ -34,7 +34,7 @@ const systemCategoryRoute = require("./routes/systemCategory.routes");
 const voucherRoute = require("./routes/voucher.routes");
 const paymentRoute = require("./routes/payment.route");
 const staffRoute = require("./routes/staff.routes");
-
+const shippingFeeRoute = require("./routes/shippingFee.routes");
 
 const app = express();
 connectDB();
@@ -103,8 +103,7 @@ app.use("/api/v1/system-category", systemCategoryRoute);
 app.use("/api/v1/voucher", voucherRoute);
 app.use("/api/v1/payment", paymentRoute);
 app.use("/api/v1/staff", staffRoute);
-
-
+app.use("/api/v1/shipping-fee", shippingFeeRoute);
 app.use(errorHandler);
 
 const server = http.createServer(app);
@@ -137,24 +136,43 @@ io.on("connection", (socket) => {
   });
 
   // Gửi thông báo đến tất cả các thiết bị của một user
-  socket.on("sendNotification", async ({ userId, title, message, type, orderId }) => {
-    try {
-      console.log(`[NOTIFICATION] Sending notification to user ${userId}: ${title}`);
-      console.log('[NOTIFICATION]' , { userId, title, message, type, orderId })
-      const newNotification = new Notification({ userId, title, message, type, orderId });
-      await newNotification.save();
-
-      // Gửi thông báo đến tất cả các socket ids của userId
-      if (userSockets[userId]) {
-        userSockets[userId].forEach((socketId) => {
-          io.to(socketId).emit("newNotification", newNotification);
-          console.log(`[NOTIFICATION] Notification sent to socket ID: ${socketId}`);
+  socket.on(
+    "sendNotification",
+    async ({ userId, title, message, type, orderId }) => {
+      try {
+        console.log(
+          `[NOTIFICATION] Sending notification to user ${userId}: ${title}`
+        );
+        console.log("[NOTIFICATION]", {
+          userId,
+          title,
+          message,
+          type,
+          orderId,
         });
+        const newNotification = new Notification({
+          userId,
+          title,
+          message,
+          type,
+          orderId,
+        });
+        await newNotification.save();
+
+        // Gửi thông báo đến tất cả các socket ids của userId
+        if (userSockets[userId]) {
+          userSockets[userId].forEach((socketId) => {
+            io.to(socketId).emit("newNotification", newNotification);
+            console.log(
+              `[NOTIFICATION] Notification sent to socket ID: ${socketId}`
+            );
+          });
+        }
+      } catch (error) {
+        console.error("Lỗi gửi thông báo:", error);
       }
-    } catch (error) {
-      console.error("Lỗi gửi thông báo:", error);
     }
-  });
+  );
 
   socket.on("disconnect", () => {
     console.log("User disconnected:", socket.id);
