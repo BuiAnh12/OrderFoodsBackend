@@ -1,14 +1,55 @@
 const express = require("express");
-const authMiddleware = require("../middlewares/authMiddleware");
-const validateMongoDbId = require("../middlewares/validateMongoDBId");
-const { addAnEmployee, getEmployeeById, updateEmployee, getAllEmployeesInStore, deleteEmployee } = require("../controllers/staff.controller");
 const router = express.Router();
+const authMiddleware = require("../middlewares/authMiddleware");
+const validateMongoDbId = require("../middlewares/validateMongoDbId");
 
-// api/v1/staff/stores/123123/employees
-router.post("/stores/:storeId", addAnEmployee);
-router.get("/:userId", getEmployeeById); // lấy 1 nhân viên
-router.put("/:userId", updateEmployee); // cập nhật
-router.delete("/stores/:storeId/:userId", deleteEmployee); // xóa
-router.get("/stores/:storeId", getAllEmployeesInStore);
+const {
+  addAnEmployee,
+  getEmployeeById,
+  updateEmployee,
+  deleteEmployee,
+  getAllEmployeesInStore,
+} = require("../controllers/staff.controller");
+
+// Thêm 1 nhân viên vào cửa hàng
+router.post(
+  "/stores/:storeId",
+  authMiddleware,
+  validateMongoDbId("storeId"),
+  addAnEmployee
+);
+
+// Lấy thông tin 1 nhân viên
+router.get(
+  "/:userId",
+  authMiddleware,
+  validateMongoDbId("userId"),
+  getEmployeeById
+);
+
+// Cập nhật thông tin nhân viên
+router.put(
+  "/:userId",
+  authMiddleware,
+  validateMongoDbId("userId"),
+  updateEmployee
+);
+
+// Xóa nhân viên khỏi cửa hàng
+router.delete(
+  "/stores/:storeId/:userId",
+  authMiddleware,
+  validateMongoDbId("storeId"),
+  validateMongoDbId("userId"),
+  deleteEmployee
+);
+
+// Lấy danh sách nhân viên trong cửa hàng
+router.get(
+  "/stores/:storeId",
+  authMiddleware,
+  validateMongoDbId("storeId"),
+  getAllEmployeesInStore
+);
 
 module.exports = router;

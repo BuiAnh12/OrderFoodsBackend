@@ -9,18 +9,19 @@ const addAnEmployee = asyncHandler(async (req, res, next) => {
     const { storeId } = req.params;
     const { name, email, password, phonenumber, gender, role } = req.body;
 
-    // Kiểm tra store
+    // 1. Kiểm tra tồn tại store
     const store = await Store.findById(storeId);
     if (!store) {
       return next(createError(404, "Cửa hàng không tồn tại."));
     }
 
-    // Kiểm tra trùng email
+    // 2. Kiểm tra email đã tồn tại chưa
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return next(createError(400, "Email đã tồn tại."));
     }
 
+    // 3. Kiểm tra role hợp lệ
     const validRoles = ["staff", "manager"];
     if (!role || !validRoles.includes(role)) {
       return next(
@@ -31,20 +32,21 @@ const addAnEmployee = asyncHandler(async (req, res, next) => {
       );
     }
 
-    // Tạo user với role là staff
+    // 4. Tạo user mới với role duy nhất
     const newEmployee = await User.create({
       name,
       email,
       password: password || "123456",
       phonenumber,
       gender,
-      role: [role],
+      role, // Không cần là mảng
     });
 
-    // Gắn user vào store
+    // 5. Gắn nhân viên vào store
     store.staff.push(newEmployee._id);
     await store.save();
 
+    // 6. Trả về kết quả
     return res.status(201).json(
       successResponse(
         {
@@ -52,6 +54,7 @@ const addAnEmployee = asyncHandler(async (req, res, next) => {
             id: newEmployee._id,
             name: newEmployee.name,
             email: newEmployee.email,
+            role: newEmployee.role,
           },
           storeId: store._id,
         },
@@ -80,31 +83,40 @@ const getEmployeeById = asyncHandler(async (req, res, next) => {
 // Cập nhật thông tin nhân viên
 const updateEmployee = asyncHandler(async (req, res, next) => {
   const { userId } = req.params;
-  const { name, phonenumber, gender, role } = req.body;
+  const { name, email, phonenumber, gender, role } = req.body;
 
+  // 1. Tìm user theo ID
   const employee = await User.findById(userId);
-  if (!employee) return next(createError(404, "Không tìm thấy nhân viên."));
+  if (!employee) {
+    return next(createError(404, "Không tìm thấy nhân viên."));
+  }
 
+  // 2. Nếu email được cập nhật và khác email cũ
+  if (email && email !== employee.email) {
+    const existingEmail = await User.findOne({ email });
+    if (existingEmail) {
+      return next(
+        createError(400, "Email đã được sử dụng bởi người dùng khác.")
+      );
+    }
+    employee.email = email;
+  }
+
+  // 3. Cập nhật các thông tin khác
   employee.name = name || employee.name;
   employee.phonenumber = phonenumber || employee.phonenumber;
   employee.gender = gender || employee.gender;
 
-  // Kiểm tra role và hợp lệ
-  const validRoles = ["user", "manager", "staff", "owner"];
-  if (role) {
-    if (Array.isArray(role)) {
-      // lọc ra các role hợp lệ
-      const filtered = role.filter((r) => validRoles.includes(r));
-      if (filtered.length) {
-        employee.role = filtered;
-      }
-    } else if (typeof role === "string" && validRoles.includes(role)) {
-      employee.role = [role];
-    }
+  // 4. Cập nhật role nếu hợp lệ
+  const validRoles = ["staff", "manager"];
+  if (role && typeof role === "string" && validRoles.includes(role)) {
+    employee.role = role;
   }
 
+  // 5. Lưu user
   await employee.save();
 
+  // 6. Trả về kết quả
   return res.status(200).json(
     successResponse(
       {
@@ -123,16 +135,30 @@ const deleteEmployee = asyncHandler(async (req, res, next) => {
   const { storeId, userId } = req.params;
 
   const store = await Store.findById(storeId);
-  if (!store) return next(createError(404, "Cửa hàng không tồn tại."));
+  if (!store) {
+    return next(createError(404, "Cửa hàng không tồn tại."));
+  }
 
   const employee = await User.findById(userId);
-  if (!employee) return next(createError(404, "Không tìm thấy nhân viên."));
+  if (!employee) {
+    return next(createError(404, "Không tìm thấy nhân viên."));
+  }
 
-  // Xóa nhân viên khỏi store.staff
+  // ✅ Không cho xóa owner
+  if (employee.role === "owner") {
+    return next(createError(403, "Không thể xóa nhân viên có quyền 'owner'."));
+  }
+
+  // ✅ Không cho xóa chính mình
+  if (req.user._id.toString() === userId) {
+    return next(createError(403, "Bạn không thể tự xóa chính mình."));
+  }
+
+  // ✅ Xóa nhân viên khỏi store.staff
   store.staff = store.staff.filter((id) => id.toString() !== userId);
   await store.save();
 
-  // Xóa nhân viên khỏi DB
+  // ✅ Xóa nhân viên khỏi DB
   await User.findByIdAndDelete(userId);
 
   return res
