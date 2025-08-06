@@ -29,34 +29,47 @@ const getDishById = asyncHandler(async (req, res) => {
 
 const getDishesByStoreId = asyncHandler(async (req, res, next) => {
     const { store_id } = req.params;
-    const { name , limit , page  } = req.query;
-    const cacheKey = `dishes:store:${store_id}`
-    const cached = await redisCache.get(cacheKey);
-    if (cached) {
-        res.status(200).json(
-            successResponse(cached, "Dishes retrieved successfully")
-        );
-      }
+    const { name, limit, page } = req.query;
+
     if (!store_id) {
         return next(createError(400, "store ID is required"));
     }
+
+    const cacheKey = `dishes:store:${store_id}${name ? `:name=${name}` : ""}${
+        limit ? `:limit=${limit}` : ""
+    }${page ? `:page=${page}` : ""}`;
+    console.log(`Cache key: ${cacheKey}`);
+    const cached = await redisCache.get(cacheKey);
+    if (cached) {
+        return res
+            .status(200)
+            .json(
+                successResponse(
+                    cached,
+                    "Dishes retrieved successfully (from cache)"
+                )
+            );
+    }
+
     let filterOptions = { storeId: new mongoose.Types.ObjectId(store_id) };
     if (name) filterOptions.name = { $regex: name, $options: "i" };
+
     const result = await getPaginatedData(
         Dish,
         filterOptions,
         [
             { path: "category", select: "name" },
             {
-              path: "toppingGroups",
-              select: "name toppings",
-              populate: { path: "toppings", select: "name price" },
+                path: "toppingGroups",
+                select: "name toppings",
+                populate: { path: "toppings", select: "name price" },
             },
-          ],
+        ],
         limit,
         page
     );
-    const cacheRes = await redisCache.set(cacheKey, result);
+
+    await redisCache.set(cacheKey, result);
     res.status(200).json(
         successResponse(result, "Dishes retrieved successfully")
     );
@@ -64,11 +77,19 @@ const getDishesByStoreId = asyncHandler(async (req, res, next) => {
 
 const createDish = asyncHandler(async (req, res, next) => {
     const { store_id } = req.params;
-    const { name, price, description, stockStatus, image, category, toppingGroups } = req.body;
+    const {
+        name,
+        price,
+        description,
+        stockStatus,
+        image,
+        category,
+        toppingGroups,
+    } = req.body;
     if (!store_id) {
         return next(createError(400, "Store ID is required"));
     }
-    if (!name || !price ) {
+    if (!name || !price) {
         return next(createError(400, "All fields are required"));
     }
     const dish = new Dish({
@@ -79,32 +100,38 @@ const createDish = asyncHandler(async (req, res, next) => {
         image,
         category,
         toppingGroups,
-        storeId: new mongoose.Types.ObjectId(store_id)
+        storeId: new mongoose.Types.ObjectId(store_id),
     });
     await dish.save();
-    await redisCache.delByPattern(`dishes:store:${store_id}`);
+    console.log(`Store effected: ${dish.storeId._id}`);
+    await redisCache.del(`dishes:store:${dish.storeId._id}`);
     res.status(201).json(successResponse(dish, "Dish created successfully"));
 });
 
 const changeStatus = asyncHandler(async (req, res, next) => {
     const { dish_id } = req.params;
-    const dish = await Dish.findById(dish_id)
+    console.log(`Change status for dish ID: ${dish_id}`);
+    const dish = await Dish.findById(dish_id);
+    console.log(dish);
     if (dish) {
-      if ( dish.stockStatus == "AVAILABLE" ) {
-        dish.stockStatus = "OUT_OF_STOCK"
-      }
-      else {
-        dish.stockStatus = "AVAILABLE"
-      }
+        if (dish.stockStatus == "AVAILABLE") {
+            dish.stockStatus = "OUT_OF_STOCK";
+        } else {
+            dish.stockStatus = "AVAILABLE";
+        }
     }
     await dish.save();
-    await redisCache.delByPattern(`dishes:store:${store_id}`);
-    res.status(200).json(successResponse(null, "Dish on/off stock status change successfully"));
+    console.log(`Store effected: ${dish.storeId._id}`);
+    await redisCache.del(`dishes:store:${dish.storeId._id}`);
+    res.status(200).json(
+        successResponse(null, "Dish on/off stock status change successfully")
+    );
 });
 
 const updateDish = asyncHandler(async (req, res, next) => {
     const { dish_id } = req.params;
-    const { name, price, description, image, category, toppingGroups } = req.body;
+    const { name, price, description, image, category, toppingGroups } =
+        req.body;
 
     if (!dish_id) {
         return next(createError(400, "Dish ID is required"));
@@ -123,7 +150,8 @@ const updateDish = asyncHandler(async (req, res, next) => {
     dish.toppingGroups = toppingGroups || dish.toppingGroups;
 
     await dish.save();
-    await redisCache.delByPattern(`dishes:store:${store_id}`);
+    console.log(`Store effected: ${dish.storeId._id}`);
+    await redisCache.del(`dishes:store:${dish.storeId._id}`);
     res.status(200).json(successResponse(null, "Dish updated successfully"));
 });
 
@@ -136,9 +164,9 @@ const deleteDish = asyncHandler(async (req, res, next) => {
     if (!dish) {
         return next(createError(404, "Dish not found"));
     }
-    await redisCache.delByPattern(`dishes:store:${store_id}`);
+    console.log(`Store effected: ${dish.storeId._id}`);
+    await redisCache.del(`dishes:store:${dish.storeId._id}`);
     res.status(200).json(successResponse(null, "Dish deleted successfully"));
-
 });
 
 module.exports = {
@@ -147,5 +175,5 @@ module.exports = {
     createDish,
     changeStatus,
     updateDish,
-    deleteDish
+    deleteDish,
 };

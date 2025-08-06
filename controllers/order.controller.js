@@ -26,6 +26,16 @@ const {
     dateFormat,
     VerifyReturnUrl,
 } = require("vnpay");
+const { select } = require("firebase-functions/params");
+
+function calcLineSubtotal(item) {
+    const base = Number(item.price || 0);
+    const qty = Number(item.quantity || 0);
+    const tops = Array.isArray(item.toppings) ? item.toppings : [];
+    const topsSum = tops.reduce((s, t) => s + Number(t.price || 0), 0);
+    return qty * (base + topsSum);
+}
+
 const getUserOrder = asyncHandler(async (req, res, next) => {
     const userId = req?.user?._id;
     if (!userId) {
@@ -108,7 +118,7 @@ const getOrderDetail = asyncHandler(async (req, res, next) => {
                 },
                 {
                     path: "toppings",
-                    select: "name price",
+                    select: "toppingName price",
                 },
             ],
         })
@@ -161,6 +171,7 @@ const getOrderDetailForStore = async (req, res) => {
                     },
                     {
                         path: "toppings",
+                        select: "toppingName price",
                     },
                 ],
             })
@@ -327,7 +338,7 @@ const cancelOrder = asyncHandler(async (req, res, next) => {
     const cancellableStatuses = ["preorder", "pending"];
 
     if (cancellableStatuses.includes(order.status)) {
-      console.log(order)
+        console.log(order);
         if (order.paymentMethod === "vnpay" && order.paymentStatus === "paid") {
             const vnpay = new VNPay({
                 tmnCode: process.env.VNPAY_TMN_CODE,
@@ -336,12 +347,14 @@ const cancelOrder = asyncHandler(async (req, res, next) => {
                 hashAlgorithm: "SHA512",
                 loggerFn: ignoreLogger,
             });
-            
+
             const payment = await Payment.findOne({
                 orderId: order._id,
             });
             if (!payment) {
-                return next(createError(404, "Payment not found for this order"));
+                return next(
+                    createError(404, "Payment not found for this order")
+                );
             }
             const transactionId = payment.transactionId;
 
@@ -358,11 +371,15 @@ const cancelOrder = asyncHandler(async (req, res, next) => {
                 vnp_OrderInfo: `Refund order ${orderId || ""}`,
                 vnp_TransactionDate: dateFormat(new Date()),
                 vnp_secureHash: payment.metadata.vnp_secureHash,
-                vnp_IpAddr: "127.0.0.1"
+                vnp_IpAddr: "127.0.0.1",
             };
             const response = await vnpay.refund(refundParams);
             console.log("Refund response:", response);
-            if (response.vnp_ResponseCode === "00" || response.vnp_ResponseCode === "99") { // Cheat code 99 for unknown error 
+            if (
+                response.vnp_ResponseCode === "00" ||
+                response.vnp_ResponseCode === "99"
+            ) {
+                // Cheat code 99 for unknown error
                 const refundRecord = await Payment.create({
                     orderId: orderId || null,
                     provider: "vnpay",
@@ -375,19 +392,17 @@ const cancelOrder = asyncHandler(async (req, res, next) => {
                 message = "Order has been cancelled and refunded successfully";
                 const deleteOrder = await Order.findById(orderId);
                 if (deleteOrder) await deleteOrder.softDelete();
-            }
-            else {
+            } else {
                 return next(
                     createError(400, "Refund failed: " + response.vnp_Message)
                 );
             }
-        }
-        else {
+        } else {
             await Order.findByIdAndDelete(orderId);
         }
         res.status(200).json({
             success: true,
-            message
+            message,
         });
     } else {
         res.status(409).json({
@@ -531,37 +546,158 @@ const getAllOrder = async (req, res) => {
 };
 
 const updateOrder = async (req, res) => {
+    const { order_id } = req.params;
+    const payload = req.body || {};
+
+    const session = await mongoose.startSession();
     try {
-        const { order_id } = req.params;
-        const updatedData = req.body;
-
-        const order = await Order.findById(order_id);
-        if (!order) {
-            return res.status(404).json({ message: "Order not found" });
-        }
-
-        // Filter out empty strings or undefined/null fields
-        const filteredData = {};
-        for (const key in updatedData) {
-            const value = updatedData[key];
-            if (value !== "" && value !== null && value !== undefined) {
-                filteredData[key] = value;
+        await session.withTransaction(async () => {
+            // 0) Load order
+            const order = await Order.findById(order_id).session(session);
+            if (!order) {
+                return res.status(404).json({ message: "Order not found" });
             }
-        }
-        delete filteredData.shipper;
 
-        Object.assign(order, filteredData);
-        await order.save();
+            // 1) Validate non-empty items (business rule)
+            const incomingItems = Array.isArray(payload.items)
+                ? payload.items
+                : [];
+            if (incomingItems.length === 0) {
+                // Don’t allow saving an empty order
+                throw Object.assign(new Error("EMPTY_ITEMS"), { code: 400 });
+            }
 
-        return res.status(200).json({
-            message: "Order updated successfully",
+            // 2) Load existing items for this order
+            const existingItems = await OrderItem.find({
+                orderId: order_id,
+            }).session(session);
+            const existingMap = new Map(
+                existingItems.map((d) => [String(d._id), d])
+            );
+
+            // 3) Upsert items
+            const keptItemIds = []; // ObjectIds that will remain in the order
+            for (const it of incomingItems) {
+                // sanitize/save only allowed fields for OrderItem
+                const docShape = {
+                    orderId: order_id,
+                    dishId: it.dishId,
+                    dishName: it.dishName,
+                    quantity: it.quantity,
+                    price: it.price,
+                    note: it.note || "",
+                };
+
+                // Basic validation (you can harden this as you like)
+                if (
+                    !docShape.dishId ||
+                    !docShape.dishName ||
+                    !docShape.quantity ||
+                    !docShape.price
+                ) {
+                    throw Object.assign(new Error("INVALID_ITEM"), {
+                        code: 400,
+                    });
+                }
+
+                let itemDoc;
+                if (it._id && existingMap.has(String(it._id))) {
+                    // update existing
+                    itemDoc = await OrderItem.findByIdAndUpdate(
+                        it._id,
+                        { $set: docShape },
+                        { new: true, session }
+                    );
+                } else {
+                    // create new
+                    itemDoc = await OrderItem.create([docShape], {
+                        session,
+                    }).then((arr) => arr[0]);
+                }
+                keptItemIds.push(itemDoc._id);
+
+                // 4) Replace toppings for this item
+                const incomingTops = Array.isArray(it.toppings)
+                    ? it.toppings
+                    : [];
+                // Delete all existing toppings for this item (simplest, avoids diff bugs)
+                await OrderItemTopping.deleteMany({
+                    orderItemId: itemDoc._id,
+                }).session(session);
+
+                if (incomingTops.length) {
+                    const toInsert = incomingTops.map((t) => ({
+                        orderItemId: itemDoc._id,
+                        toppingId: t._id, // map from client `_id` -> toppingId
+                        toppingName: t.name,
+                        price: t.price,
+                    }));
+                    await OrderItemTopping.insertMany(toInsert, { session });
+                }
+            }
+
+            // 5) Delete removed items + their toppings
+            const toDelete = existingItems
+                .filter(
+                    (d) =>
+                        !keptItemIds.some(
+                            (kid) => String(kid) === String(d._id)
+                        )
+                )
+                .map((d) => d._id);
+
+            if (toDelete.length) {
+                await OrderItemTopping.deleteMany({
+                    orderItemId: { $in: toDelete },
+                }).session(session);
+                await OrderItem.deleteMany({ _id: { $in: toDelete } }).session(
+                    session
+                );
+            }
+
+            // 6) Recompute totals on server (safer than trusting client)
+            let subtotalPrice = 0;
+            for (const it of incomingItems) {
+                subtotalPrice += calcLineSubtotal(it);
+            }
+            const shippingFee = Number(
+                payload.shippingFee ?? order.shippingFee ?? 0
+            );
+            const totalDiscount = Number(
+                payload.totalDiscount ?? order.totalDiscount ?? 0
+            );
+            const finalTotal = subtotalPrice + shippingFee - totalDiscount;
+
+            // 7) Patch order scalars (don’t copy nested/virtuals like items/user/store)
+            const orderPatch = {
+                status: payload.status ?? order.status,
+                paymentMethod: payload.paymentMethod ?? order.paymentMethod,
+                paymentStatus: payload.paymentStatus ?? order.paymentStatus,
+                subtotalPrice,
+                totalDiscount,
+                shippingFee,
+                finalTotal,
+            };
+            await Order.updateOne(
+                { _id: order_id },
+                { $set: orderPatch }
+            ).session(session);
         });
-    } catch (error) {
-        console.error("Error updating order:", error);
+
+        return res.status(200).json({ message: "Order updated successfully" });
+    } catch (err) {
+        if (err && err.code === 400 && err.message === "EMPTY_ITEMS") {
+            return res.status(400).json({ message: "Order cannot be empty." });
+        }
+        if (err && err.code === 400 && err.message === "INVALID_ITEM") {
+            return res.status(400).json({ message: "Invalid item payload." });
+        }
+        console.error("Error updating order:", err);
         return res.status(500).json({ message: "Internal server error" });
+    } finally {
+        session.endSession();
     }
 };
-
 const reOrder = async (req, res) => {
     try {
         const userId = req?.user?._id;
@@ -595,12 +731,10 @@ const reOrder = async (req, res) => {
         }
 
         if (order.store.status === "BLOCKED") {
-            return res
-                .status(403)
-                .json({
-                    success: false,
-                    message: "Cannot reorder from a blocked store",
-                });
+            return res.status(403).json({
+                success: false,
+                message: "Cannot reorder from a blocked store",
+            });
         }
 
         // Kiểm tra món nào đã hết hàng
@@ -609,12 +743,10 @@ const reOrder = async (req, res) => {
         );
 
         if (hasOutOfStock) {
-            return res
-                .status(403)
-                .json({
-                    success: false,
-                    message: "Some dishes are out of stock",
-                });
+            return res.status(403).json({
+                success: false,
+                message: "Some dishes are out of stock",
+            });
         }
 
         // Xoá cart cũ nếu tồn tại
