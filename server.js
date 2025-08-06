@@ -35,6 +35,7 @@ const voucherRoute = require("./routes/voucher.routes");
 const paymentRoute = require("./routes/payment.route");
 const staffRoute = require("./routes/staff.routes");
 const shippingFeeRoute = require("./routes/shippingFee.routes");
+const storeRoute = require("./routes/store.routes");
 
 const app = express();
 connectDB();
@@ -104,6 +105,7 @@ app.use("/api/v1/voucher", voucherRoute);
 app.use("/api/v1/payment", paymentRoute);
 app.use("/api/v1/staff", staffRoute);
 app.use("/api/v1/shipping-fee", shippingFeeRoute);
+app.use("/api/v1/store", storeRoute);
 app.use(errorHandler);
 
 const server = http.createServer(app);

@@ -119,7 +119,7 @@ const deleteShippingFee = asyncHandler(async (req, res) => {
 // Tính phí ship dựa trên khoảng cách
 const calculateShippingFee = asyncHandler(async (req, res) => {
   const { storeId } = req.params;
-  const { distanceKm } = req.body;
+  const { distanceKm } = req.query;
 
   if (!distanceKm || isNaN(distanceKm)) {
     return res

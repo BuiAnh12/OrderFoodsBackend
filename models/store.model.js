@@ -36,6 +36,16 @@ const storeSchema = new mongoose.Schema(
       enum: ["OPEN", "CLOSED"],
       default: "OPEN",
     },
+    openHour: {
+      type: String,
+      required: true,
+      default: "08:00",
+    },
+    closeHour: {
+      type: String,
+      required: true,
+      default: "18:00",
+    },
     paperWork: {
       IC_front: { filePath: String, url: String },
       IC_back: { filePath: String, url: String },
