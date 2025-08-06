@@ -155,7 +155,7 @@ const calculateShippingFee = asyncHandler(async (req, res) => {
 
   res.status(200).json({
     status: "success",
-    fee: totalFee,
+    fee: Math.round(totalFee),
   });
 });
 
