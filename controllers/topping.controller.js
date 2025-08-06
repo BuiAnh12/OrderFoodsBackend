@@ -241,13 +241,17 @@ const deleteToppingInGroup = asyncHandler(async (req, res, next) => {
 const deleteToppingGroup = asyncHandler(async (req, res, next) => {
     const { group_id } = req.params;
 
+    // Find the group first
     const deletedGroup = await ToppingGroup.findByIdAndDelete(group_id);
 
     if (!deletedGroup) {
         return next(createError(404, "Topping group not found"));
     }
 
-    res.status(200).json(successResponse(null, "Topping group deleted successfully"));
+    // Delete all toppings that belong to this group
+    await Topping.deleteMany({ toppingGroup: group_id });
+
+    res.status(200).json(successResponse(null, "Topping group and all toppings deleted successfully"));
 });
 
 module.exports = {

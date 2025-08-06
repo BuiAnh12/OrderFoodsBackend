@@ -1,7 +1,7 @@
 // utils/redisCache.js
 const redisClient = require("../config/redis");
 
-const DEFAULT_TTL = 3600; // 1 hour
+const DEFAULT_TTL = 3600; // seconds
 
 const redisCache = {
   /**
@@ -11,47 +11,45 @@ const redisCache = {
    */
   async get(key) {
     try {
-      const cached = await redisClient.get(key);
-      return cached ? JSON.parse(cached) : null;
-    } catch (err) {
-      console.error(`❌ Redis GET error for key "${key}":`, err);
+      const data = await redisClient.get(key);
+      return data ? JSON.parse(data) : null;
+    } catch (error) {
+      console.error(`Redis GET error for key "${key}":`, error);
       return null;
     }
   },
 
   /**
-   * Set a value to cache with optional TTL.
+   * Set a value to cache with TTL
    * @param {string} key
    * @param {any} value
    * @param {number} ttl
    */
   async set(key, value, ttl = DEFAULT_TTL) {
     try {
-      await redisClient.set(key, JSON.stringify(value), {
-        EX: ttl,
-      });
-      console.log('Redis set successfull')
-    } catch (err) {
-      console.error(`❌ Redis SET error for key "${key}":`, err);
+      await redisClient.set(key, JSON.stringify(value), { EX: ttl });
+      console.log(`✅ Redis SET: ${key}`);
+    } catch (error) {
+      console.error(`Redis SET error for key "${key}":`, error);
     }
   },
 
   /**
-   * Delete a specific key from cache.
+   * Delete cache by key
    * @param {string} key
    */
   async del(key) {
     try {
       await redisClient.del(key);
-    } catch (err) {
-      console.error(`❌ Redis DEL error for key "${key}":`, err);
+      console.log(`🗑️ Redis DEL: ${key}`);
+    } catch (error) {
+      console.error(`Redis DEL error for key "${key}":`, error);
     }
   },
 
   /**
-   * Delete all keys matching a pattern.
-   * Uses SCAN + DEL for performance and safety.
-   * @param {string} pattern e.g. "dishes:store:*"
+   * Delete cache by pattern
+   * @param {string} pattern
    */
   async delByPattern(pattern) {
     try {
@@ -63,12 +61,13 @@ const redisCache = {
         });
         cursor = nextCursor;
 
-        if (keys.length > 0) {
+        if (keys.length) {
           await redisClient.del(...keys);
+          console.log(`🧹 Redis DEL pattern match: ${pattern} — deleted ${keys.length} keys`);
         }
       } while (cursor !== "0");
-    } catch (err) {
-      console.error(`❌ Redis pattern DEL error for pattern "${pattern}":`, err);
+    } catch (error) {
+      console.error(`Redis DEL pattern error "${pattern}":`, error);
     }
   },
 };
