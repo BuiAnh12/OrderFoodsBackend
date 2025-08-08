@@ -36,6 +36,14 @@ const createShippingFee = asyncHandler(async (req, res) => {
     });
   }
 
+  // ❌ Không cho thêm feePerKm quá 5000
+  if (feePerKm > 5000) {
+    return res.status(400).json({
+      status: "error",
+      message: "feePerKm không được vượt quá 5000",
+    });
+  }
+
   // ✅ Kiểm tra đã tồn tại fromDistance trong store chưa
   const exists = await ShippingFee.findOne({ store: storeId, fromDistance });
   if (exists) {
@@ -75,7 +83,7 @@ const updateShippingFee = asyncHandler(async (req, res) => {
     const duplicate = await ShippingFee.findOne({
       store: existing.store,
       fromDistance,
-      _id: { $ne: feeId }, // exclude chính nó
+      _id: { $ne: feeId },
     });
 
     if (duplicate) {
@@ -86,16 +94,23 @@ const updateShippingFee = asyncHandler(async (req, res) => {
     }
   }
 
-  const updated = await ShippingFee.findByIdAndUpdate(
-    feeId,
-    { fromDistance, feePerKm },
-    { new: true }
-  );
+  // ❌ Không cho update feePerKm > 5000
+  if (feePerKm !== undefined && feePerKm > 5000) {
+    return res.status(400).json({
+      status: "error",
+      message: "feePerKm không được vượt quá 5000",
+    });
+  }
+
+  existing.fromDistance = fromDistance ?? existing.fromDistance;
+  existing.feePerKm = feePerKm ?? existing.feePerKm;
+
+  await existing.save();
 
   res.status(200).json({
     status: "success",
-    message: "Cập nhật mức phí thành công",
-    data: updated,
+    message: "Cập nhật mức shipping thành công",
+    data: existing,
   });
 });
 
@@ -103,12 +118,24 @@ const updateShippingFee = asyncHandler(async (req, res) => {
 const deleteShippingFee = asyncHandler(async (req, res) => {
   const { feeId } = req.params;
 
-  const deleted = await ShippingFee.findByIdAndDelete(feeId);
-  if (!deleted) {
+  // Tìm bản ghi trước khi xóa
+  const fee = await ShippingFee.findById(feeId);
+  if (!fee) {
     return res
       .status(404)
       .json({ status: "error", message: "Không tìm thấy mức shipping" });
   }
+
+  // Không cho xóa nếu fromDistance là 0
+  if (fee.fromDistance === 0) {
+    return res.status(400).json({
+      status: "error",
+      message: "Không thể xóa mức 0",
+    });
+  }
+
+  // Tiến hành xóa
+  await fee.deleteOne();
 
   res.status(200).json({
     status: "success",
