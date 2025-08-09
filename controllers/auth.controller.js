@@ -242,10 +242,8 @@ const registerStore = asyncHandler(async (req, res) => {
           cover,
           address: {
             full_address: address.full_address,
-            location: {
-              type: "Point",
-              coordinates: [address.lon, address.lat],
-            },
+            lat: address.lat,
+            lon: address.lon,
           },
           paperWork: {
             IC_front: paperWork.IC_front,
