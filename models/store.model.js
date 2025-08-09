@@ -63,7 +63,6 @@ const storeSchema = new mongoose.Schema(
         ref: "User",
       },
     ],
-    isApproved: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
