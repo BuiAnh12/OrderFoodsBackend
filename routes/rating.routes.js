@@ -24,8 +24,8 @@ router.put("/edit-rating/:ratingId", authMiddleware, validateMongoDbId("ratingId
 router.delete("/delete-rating/:ratingId", authMiddleware, validateMongoDbId("ratingId"), deleteStoreRating);
 
 // GET /api/v1/rating?replied=true|false|undefined&page=1&limit=10&sort=-createdAt
-router.get("/", authMiddleware, roleAuthMiddleware(["owner", "employee", "manager"]), getRatingsByStore);
+router.get("/", authMiddleware, roleAuthMiddleware(["owner", "staff", "manager"]), getRatingsByStore);
 
-router.patch("/:id/reply", authMiddleware, roleAuthMiddleware(["owner", "employee", "manager"]), replyToRating);
+router.patch("/:id/reply", authMiddleware, roleAuthMiddleware(["owner", "staff", "manager"]), replyToRating);
 
 module.exports = router;
