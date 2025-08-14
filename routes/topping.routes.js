@@ -19,28 +19,28 @@ const router = express.Router();
 router.get("/store/:store_id",authMiddleware,roleAuthMiddleware(["owner", "staff", "manager"]), getStoreToppings);
 // router.get("/store/:store_id", getStoreToppings);
 
-router.get("/topping-group/:group_id",authMiddleware,roleAuthMiddleware(["owner", "staff", "manager"]), getToppingGroupById);
+router.get("/topping-group/:group_id",authMiddleware,roleAuthMiddleware(["owner", "staff",  "manager"]), getToppingGroupById);
 // router.get("/topping-group/:group_id", getToppingGroupById);
 
-router.get("/dish/:dish_id", authMiddleware,roleAuthMiddleware(["owner", "staff", "manager"]), getDishToppings);
+router.get("/dish/:dish_id", authMiddleware,roleAuthMiddleware(["owner", "staff",  "manager"]), getDishToppings);
 // router.get("/dish/:dish_id", getDishToppings);
 
-router.get("/topping-group/:group_id",authMiddleware,roleAuthMiddleware(["owner", "staff", "manager"]), getToppingById);
+router.get("/topping-group/:group_id",authMiddleware,roleAuthMiddleware(["owner",  "staff", "manager"]), getToppingById);
 // router.get("/:topping_id", getToppingById);
 
-router.post("/store/:store_id/topping-group", authMiddleware, roleAuthMiddleware(["owner", "staff", "manager"]), createToppingGroup);
+router.post("/store/:store_id/topping-group", authMiddleware, roleAuthMiddleware(["owner",  "manager"]), createToppingGroup);
 // router.post("/store/:store_id/topping-group", createToppingGroup);
 
-router.post("/topping-group/:group_id/topping", authMiddleware, roleAuthMiddleware(["owner", "staff", "manager"]), createToppingInGroup);
+router.post("/topping-group/:group_id/topping", authMiddleware, roleAuthMiddleware(["owner",  "manager"]), createToppingInGroup);
 // router.post("/topping-group/:group_id/topping", createToppingInGroup);
 
-router.put("/topping-group/:group_id/topping/:topping_id", authMiddleware, roleAuthMiddleware(["owner", "staff", "manager"]), updateToppingInGroup);
+router.put("/topping-group/:group_id/topping/:topping_id", authMiddleware, roleAuthMiddleware(["owner",  "manager"]), updateToppingInGroup);
 // router.put("/topping-group/:group_id/topping/:topping_id", updateToppingInGroup);
 
-router.delete("/topping-group/:group_id/topping/:topping_id", authMiddleware, roleAuthMiddleware(["owner", "staff", "manager"]), deleteToppingInGroup);
+router.delete("/topping-group/:group_id/topping/:topping_id", authMiddleware, roleAuthMiddleware(["owner",  "manager"]), deleteToppingInGroup);
 // router.delete("/topping-group/:group_id/topping/:topping_id", deleteToppingInGroup);
 
-router.delete("/topping-group/:group_id", authMiddleware, roleAuthMiddleware(["owner", "staff", "manager"]), deleteToppingGroup);
+router.delete("/topping-group/:group_id", authMiddleware, roleAuthMiddleware(["owner",  "manager"]), deleteToppingGroup);
 // router.delete("/topping-group/:group_id", deleteToppingGroup);
 
 module.exports = router;
