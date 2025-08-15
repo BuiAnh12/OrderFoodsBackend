@@ -262,6 +262,22 @@ const updateStorePaperWork = asyncHandler(async (req, res, next) => {
     next(error);
   }
 });
+
+const changeStoreStatusTest = asyncHandler(async (req, res, next) => {
+  const store = await Store.findById("67c6e409f1c07122e88619d6");
+  if (store.openStatus == "CLOSED") {
+    store.openStatus = "OPEN";
+  }
+  else {
+    store.openStatus = "CLOSED";
+  }
+  await store.save();
+  res.status(200).json({
+    success: true,
+    message: "Store status changed successfully",
+    store,
+  });
+});
 module.exports = {
   getStoreInfo,
   toggleOpenStatus,
@@ -270,4 +286,5 @@ module.exports = {
   updateStoreImages,
   updateStoreAddress,
   updateStorePaperWork,
+  changeStoreStatusTest
 };

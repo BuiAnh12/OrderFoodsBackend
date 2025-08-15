@@ -9,6 +9,7 @@ const {
   updateStoreImages,
   updateStoreAddress,
   updateStorePaperWork,
+  changeStoreStatusTest
 } = require("../controllers/store.controller");
 
 const router = express.Router();
@@ -20,5 +21,6 @@ router.patch("/info", authMiddleware, updateStoreInfo);
 router.patch("/images", authMiddleware, updateStoreImages);
 router.patch("/address", authMiddleware, updateStoreAddress);
 router.patch("/paperwork", authMiddleware, updateStorePaperWork);
+router.post("/test/changeStatus", changeStoreStatusTest)
 
 module.exports = router;
