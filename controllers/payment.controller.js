@@ -179,7 +179,7 @@ const handleVnpReturn = asyncHandler(async (req, res) => {
                 );
 
                 return res.redirect(
-                    `http://localhost:3000/store/${currentCart.storeId}/cart`
+                    `http://localhost:3001/store/${currentCart.storeId}/cart`
                 );
             }
             const existingPayment = await Payment.findOne({
@@ -202,20 +202,20 @@ const handleVnpReturn = asyncHandler(async (req, res) => {
             }
             successOrder.save();
             return res.redirect(
-                `http://localhost:3000/orders/detail-order/${result.orderId}?status=success`
+                `http://localhost:3001/orders/detail-order/${result.orderId}?status=success`
             );
         } else {
             console.log(
                 `[VNPay Return] Payment failed. Code: ${vnp_ResponseCode}`
             );
             return res.redirect(
-                `http://localhost:3000/store/${currentCart.storeId}/cart?status=${vnp_ResponseCode}`
+                `http://localhost:3001/store/${currentCart.storeId}/cart?status=${vnp_ResponseCode}`
             );
         }
     } catch (err) {
         console.error("[VNPay Return] Error processing order:", err);
         return res.redirect(
-            `http://localhost:3000/store/${currentCart.storeId}/cart?status=error`
+            `http://localhost:3001/store/${currentCart.storeId}/cart?status=error`
         );
     }
 });

@@ -10,7 +10,7 @@ const http = require("http");
 const socketIo = require("socket.io");
 const morgan = require("morgan");
 
-const { setSocketIo, getUserSockets } = require("./utils/socketManager");
+const { setSocketIo, getUserSockets, registerStoreSocket, getStoreSockets } = require("./utils/socketManager");
 const Notification = require("./models/notification.model");
 const swaggerUi = require("swagger-ui-express");
 const swaggerJsdoc = require("swagger-jsdoc");
@@ -135,6 +135,12 @@ io.on("connection", (socket) => {
     } catch (error) {
       console.error("Lỗi lấy thông báo:", error);
     }
+  });
+
+  socket.on("registerStore", (storeId) => {
+    registerStoreSocket(storeId, socket.id);
+    console.log(`Store ${storeId} connected with socket ${socket.id}`);
+    console.log(getStoreSockets())
   });
 
   // Gửi thông báo đến tất cả các thiết bị của một user

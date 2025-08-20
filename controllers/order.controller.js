@@ -520,20 +520,16 @@ const updateOrder = async (req, res) => {
       // 1) Validate non-empty items (business rule)
       const incomingItems = Array.isArray(payload.items) ? payload.items : [];
       if (incomingItems.length === 0) {
-        // Don’t allow saving an empty order
         throw Object.assign(new Error("EMPTY_ITEMS"), { code: 400 });
       }
 
       // 2) Load existing items for this order
-      const existingItems = await OrderItem.find({
-        orderId: order_id,
-      }).session(session);
+      const existingItems = await OrderItem.find({ orderId: order_id }).session(session);
       const existingMap = new Map(existingItems.map((d) => [String(d._id), d]));
 
       // 3) Upsert items
-      const keptItemIds = []; // ObjectIds that will remain in the order
+      const keptItemIds = [];
       for (const it of incomingItems) {
-        // sanitize/save only allowed fields for OrderItem
         const docShape = {
           orderId: order_id,
           dishId: it.dishId,
@@ -543,37 +539,27 @@ const updateOrder = async (req, res) => {
           note: it.note || "",
         };
 
-        // Basic validation (you can harden this as you like)
         if (!docShape.dishId || !docShape.dishName || !docShape.quantity || !docShape.price) {
-          throw Object.assign(new Error("INVALID_ITEM"), {
-            code: 400,
-          });
+          throw Object.assign(new Error("INVALID_ITEM"), { code: 400 });
         }
 
         let itemDoc;
         if (it._id && existingMap.has(String(it._id))) {
-          // update existing
           itemDoc = await OrderItem.findByIdAndUpdate(it._id, { $set: docShape }, { new: true, session });
         } else {
-          // create new
-          itemDoc = await OrderItem.create([docShape], {
-            session,
-          }).then((arr) => arr[0]);
+          itemDoc = await OrderItem.create([docShape], { session }).then((arr) => arr[0]);
         }
         keptItemIds.push(itemDoc._id);
 
         // 4) Replace toppings for this item
         const incomingTops = Array.isArray(it.toppings) ? it.toppings : [];
-        // Delete all existing toppings for this item (simplest, avoids diff bugs)
-        await OrderItemTopping.deleteMany({
-          orderItemId: itemDoc._id,
-        }).session(session);
+        await OrderItemTopping.deleteMany({ orderItemId: itemDoc._id }).session(session);
 
         if (incomingTops.length) {
           const toInsert = incomingTops.map((t) => ({
             orderItemId: itemDoc._id,
-            toppingId: t._id, // map from client `_id` -> toppingId
-            toppingName: t.name,
+            toppingId: t._id,
+            toppingName: t.toppingName || t.name, // 👈 merge both fields safely
             price: t.price,
           }));
           await OrderItemTopping.insertMany(toInsert, { session });
@@ -586,13 +572,11 @@ const updateOrder = async (req, res) => {
         .map((d) => d._id);
 
       if (toDelete.length) {
-        await OrderItemTopping.deleteMany({
-          orderItemId: { $in: toDelete },
-        }).session(session);
+        await OrderItemTopping.deleteMany({ orderItemId: { $in: toDelete } }).session(session);
         await OrderItem.deleteMany({ _id: { $in: toDelete } }).session(session);
       }
 
-      // 6) Recompute totals on server (safer than trusting client)
+      // 6) Recompute totals on server
       let subtotalPrice = 0;
       for (const it of incomingItems) {
         subtotalPrice += calcLineSubtotal(it);
@@ -601,7 +585,7 @@ const updateOrder = async (req, res) => {
       const totalDiscount = Number(payload.totalDiscount ?? order.totalDiscount ?? 0);
       const finalTotal = subtotalPrice + shippingFee - totalDiscount;
 
-      // 7) Patch order scalars (don’t copy nested/virtuals like items/user/store)
+      // 7) Patch order scalars
       const orderPatch = {
         status: payload.status ?? order.status,
         paymentMethod: payload.paymentMethod ?? order.paymentMethod,
@@ -628,6 +612,7 @@ const updateOrder = async (req, res) => {
     session.endSession();
   }
 };
+
 const reOrder = async (req, res) => {
   try {
     const userId = req?.user?._id;
