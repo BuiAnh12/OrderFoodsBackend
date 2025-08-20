@@ -629,7 +629,7 @@ const updateOrder = async (req, res) => {
                     const toInsert = incomingTops.map((t) => ({
                         orderItemId: itemDoc._id,
                         toppingId: t._id, // map from client `_id` -> toppingId
-                        toppingName: t.name,
+                        toppingName: t.toppingName,
                         price: t.price,
                     }));
                     await OrderItemTopping.insertMany(toInsert, { session });

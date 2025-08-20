@@ -15,6 +15,9 @@ const OrderShipInfo = require("../models/orderShipInfo.model");
 const OrderVoucher = require("../models/orderVoucher.model");
 const Voucher = require("../models/voucher.model");
 const UserVoucherUsage = require("../models/userVoucherUsage.model");
+const { getStoreSockets, getIo } = require("../utils/socketManager");
+
+const storeSockets = getStoreSockets();
 
 const getUserCart = async (req, res) => {
   try {
@@ -461,7 +464,7 @@ const completeCart = async (req, res) => {
 
     // --- Thông báo cho store ---
     const store = await Store.findById(storeId);
-    await Notification.create({
+    const newNotification = await Notification.create({
       userId: store.owner,
       orderId: newOrder._id,
       title: "New Order has been placed",
@@ -469,6 +472,37 @@ const completeCart = async (req, res) => {
       type: "order",
       status: "unread",
     });
+    console.log(storeId)
+
+    if (storeSockets[storeId]) {
+      storeSockets[storeId].forEach((socketId) => {
+        const io = getIo();
+        io.to(socketId).emit("newOrderNotification", {
+          notification: {
+            id: newNotification._id,
+            title: newNotification.title,
+            message: newNotification.message,
+            type: newNotification.type,
+            status: newNotification.status,
+            createdAt: newNotification.createdAt,
+            updatedAt: newNotification.updatedAt,
+          },
+          order: {
+            id: newOrder.id,
+            customerName: newOrder.customerName,
+            totalPrice: newOrder.totalPrice,
+            status: newOrder.status,
+            createdAt: newOrder.createdAt,
+          },
+          userId: userId,
+        });
+        console.log(
+          `[NOTIFICATION] Notification sent to socket ID: ${socketId}`
+        );
+      });
+    }
+
+    
 
     return res.status(201).json({
       success: true,

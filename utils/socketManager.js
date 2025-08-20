@@ -6,7 +6,7 @@ const storeSockets = {}; // Store socket IDs by store
 const setSocketIo = (socketIoInstance) => {
   io = socketIoInstance;
 };
-
+const getIo = () => io;
 const getUserSockets = () => userSockets;
 
 const registerUserSocket = (userId, socketId) => {
@@ -45,4 +45,5 @@ module.exports = {
   registerStoreSocket,
   unregisterStoreSocket,
   getStoreSockets,
+  getIo
 };

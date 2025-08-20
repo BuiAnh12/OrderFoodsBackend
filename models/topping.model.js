@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 
 const toppingSchema = new mongoose.Schema(
   {
-    toppingGroup: {
+    toppingGroupId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "ToppingGroup",
       required: true,

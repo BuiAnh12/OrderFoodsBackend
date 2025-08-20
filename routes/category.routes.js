@@ -16,7 +16,7 @@ const router = express.Router();
 router.get("/store/:store_id", authMiddleware, roleAuthMiddleware(["owner", "staff", "manager"]), getStoreCategories);
 // router.get("/store/:store_id", getStoreCategories);
 
-router.post("/store/:store_id", authMiddleware, roleAuthMiddleware(["owner", "staff", "manager"]), getCategoryById); 
+router.get("/store/:category_id", authMiddleware, roleAuthMiddleware(["owner", "staff", "manager"]), getCategoryById); 
 // router.get("/:category_id", getCategoryById);
 
 router.post("/store/:store_id", authMiddleware, roleAuthMiddleware(["owner", "staff", "manager"]), createCategory);

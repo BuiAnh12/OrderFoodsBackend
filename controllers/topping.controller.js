@@ -165,7 +165,7 @@ const createToppingInGroup = asyncHandler(async (req, res, next) => {
     const newTopping = await Topping.create({
       name,
       price: parsedPrice,
-      toppingGroup: group_id, // Associate it with the group
+      toppingGroupId: group_id, // Associate it with the group
     });
 
     // Push the new topping's ObjectId to the toppingGroup
@@ -196,7 +196,7 @@ const updateToppingInGroup = asyncHandler(async (req, res, next) => {
 
     // Find and update the topping
     const updatedTopping = await Topping.findOneAndUpdate(
-      { _id: topping_id, toppingGroup: group_id },
+      { _id: topping_id, toppingGroupId: group_id },
       { name, price },
       { new: true }
     );
